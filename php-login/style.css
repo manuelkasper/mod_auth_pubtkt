@@ -1,0 +1,38 @@
+* {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12pt;
+}
+
+h2 {
+	font-size: 16pt;
+}
+
+.logintbl {
+	border-collapse: collapse;
+}
+
+.logintbl td, .logintbl th {
+	padding: 0.3em;
+	border: 1px solid #bbb;
+	background-color: #f7f7f7;
+}
+
+.logintbl th {
+	text-align: left;
+	background-color: #e0e0e0;
+	padding-right: 1em;
+}
+
+.logintbl tr.blank td {
+	background-color: white;
+	border: none;
+}
+
+.errmsg {
+	color: red;
+}
+
+a {
+	text-decoration: none;
+	font-size: 0.8em;
+}
