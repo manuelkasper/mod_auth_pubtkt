@@ -18,17 +18,22 @@
 #include "http_core.h"
 #include "http_protocol.h"
 #include "http_request.h"
+#include "ap_mmn.h"
 
-#ifdef APACHE13
+#if MODULE_MAGIC_NUMBER < 20010224
 #include "ap_compat.h"
 #else
 #include "apr_lib.h"
 #include "apr_strings.h"
 #include "apr_uuid.h"
 #include "apr_base64.h"
+#include "apu_version.h"
 #endif
-#ifdef APACHE22
-#include "ap22_compat.h"
+#if MODULE_MAGIC_NUMBER >= 20050101
+#define ap_http_method ap_http_scheme
+#endif
+#if APU_MAJOR_VERSION > 0
+#define apr_uri_default_port_for_scheme apr_uri_port_of_scheme
 #endif
 
 #define AUTH_COOKIE_NAME "auth_pubtkt"
