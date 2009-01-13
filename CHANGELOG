@@ -1,0 +1,16 @@
+v0.3 (01/13/2009)
+-----------------
+
+- Added TKTAuthFakeBasicAuth option (when enabled, adds an Authorization
+  header to prevent problems with username logging for requests that are
+  handled by PHP), contributed by Frederic Planchon <frederic@planchon.org>.
+
+- Added support for ticket refreshing (TKTAuthRefreshURL and
+  TKTAuthGracePeriod configuration directives), contributed by
+  Frederic Planchon <frederic@planchon.org>.
+
+
+v0.2 (02/03/2008)
+-----------------
+
+- Initial public release.

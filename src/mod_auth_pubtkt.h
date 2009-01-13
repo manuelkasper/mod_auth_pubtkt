@@ -1,8 +1,11 @@
 #ifndef MOD_AUTH_PUBTKT_H
 #define MOD_AUTH_PUBTKT_H 1
 
+#ifndef _WIN32
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#endif
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 #include <openssl/rsa.h>
@@ -36,6 +39,7 @@
 #define apr_uri_default_port_for_scheme apr_uri_port_of_scheme
 #endif
 
+#define MOD_AUTH_PUBTKT_AUTH_TYPE "mod_auth_pubtkt"
 #define AUTH_COOKIE_NAME "auth_pubtkt"
 #define BACK_ARG_NAME "back"
 #define REMOTE_USER_ENV "REMOTE_USER"
@@ -57,9 +61,12 @@ typedef struct  {
 	char				*unauth_url;
 	char				*auth_cookie_name;
 	char				*back_arg_name;
+	char				*refresh_url;
 	apr_array_header_t	*auth_token;
 	int					require_ssl;
 	int					debug;
+	int					fake_basic_auth;
+	int					grace_period;
 } auth_pubtkt_dir_conf;
 
 /* Per-server configuration */
@@ -130,6 +137,7 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket);
 static int check_tokens(request_rec *r, auth_pubtkt *tkt);
 static int check_clientip(request_rec *r, auth_pubtkt *tkt);
 static int check_timeout(request_rec *r, auth_pubtkt *tkt);
+static int check_grace_period(request_rec *r, auth_pubtkt *tkt, auth_pubtkt_dir_conf *conf);
 
 static APR_INLINE unsigned char *c2x(unsigned what, unsigned char *where);
 static char *escape_extras(apr_pool_t *p, const char *segment);

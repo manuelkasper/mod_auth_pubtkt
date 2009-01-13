@@ -66,8 +66,11 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->auth_token = apr_array_make(p, 0, sizeof (char *));
 	conf->auth_cookie_name = AUTH_COOKIE_NAME;
 	conf->back_arg_name = BACK_ARG_NAME;
+	conf->refresh_url = NULL;
 	conf->require_ssl = -1;
 	conf->debug = -1;
+	conf->fake_basic_auth = -1;
+	conf->grace_period = -1;
 	return conf;
 }
 
@@ -86,8 +89,11 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->auth_token = (subdir->auth_token->nelts > 0) ? subdir->auth_token : parent->auth_token;
 	conf->auth_cookie_name = (subdir->auth_cookie_name) ? subdir->auth_cookie_name : parent->auth_cookie_name;
 	conf->back_arg_name = (subdir->back_arg_name) ? subdir->back_arg_name : parent->back_arg_name;
+	conf->refresh_url = (subdir->refresh_url) ? subdir->refresh_url : parent->refresh_url;
 	conf->require_ssl = (subdir->require_ssl >= 0) ? subdir->require_ssl : parent->require_ssl;
 	conf->debug = (subdir->debug >= 0) ? subdir->debug : parent->debug;
+	conf->fake_basic_auth = (subdir->fake_basic_auth >= 0) ? subdir->fake_basic_auth : parent->fake_basic_auth;
+	conf->grace_period = (subdir->grace_period >= 0) ? subdir->grace_period : parent->grace_period;
 	
 	return conf;
 }
@@ -280,8 +286,14 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_TAKE1("TKTAuthBackArgName", ap_set_string_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, back_arg_name),
 		OR_AUTHCFG, "name to use for back url argument (NULL for none)"),
+	AP_INIT_TAKE1("TKTAuthRefreshURL", ap_set_string_slot, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, refresh_url),
+		OR_AUTHCFG, "URL to redirect to if cookie reach grace period"),
 	AP_INIT_FLAG("TKTAuthRequireSSL", ap_set_flag_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, require_ssl),
+		OR_AUTHCFG, "whether to refuse non-HTTPS requests"),
+	AP_INIT_FLAG("TKTAuthFakeBasicAuth", ap_set_flag_slot, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, fake_basic_auth),
 		OR_AUTHCFG, "whether to refuse non-HTTPS requests"),
 	AP_INIT_ITERATE("TKTAuthToken", set_auth_pubtkt_token, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, auth_token),
@@ -291,6 +303,9 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_ITERATE("TKTAuthDebug", set_auth_pubtkt_debug, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, debug),
 		OR_AUTHCFG, "debug level (1-3, higher for more debug output)"),
+	AP_INIT_TAKE1("TKTAuthGracePeriod", ap_set_int_slot, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, grace_period),
+		OR_AUTHCFG, "Seconds before cookie expires"),
 	{NULL},
 };
 
@@ -598,6 +613,14 @@ static int check_timeout(request_rec *r, auth_pubtkt *tkt) {
 	return (now <= tkt->valid_until);
 }
 
+/* Check whether the given ticket will time out and enter into grace period
+ * Returns 1 if okay, 0 if timed out */
+static int check_grace_period(request_rec *r, auth_pubtkt *tkt, auth_pubtkt_dir_conf *conf) {
+	time_t now = time(NULL);
+
+	return conf->grace_period<=0 || (now <= (tkt->valid_until - conf->grace_period));
+}
+
 /* Hex conversion, from httpd util.c */
 static const char c2x_table[] = "0123456789abcdef";
 static APR_INLINE unsigned char *c2x(unsigned what, unsigned char *where) {
@@ -706,6 +729,7 @@ void dump_config(request_rec *r) {
 		fprintf(stderr,"TKTAuthUnauthURL: %s\n", 	        conf->unauth_url);
 		fprintf(stderr,"TKTAuthCookieName: %s\n", 	        conf->auth_cookie_name);
 		fprintf(stderr,"TKTAuthBackArgName: %s\n",	        conf->back_arg_name);
+		fprintf(stderr,"TKTAuthRefreshURL: %s\n",	        conf->refresh_url);
 		fprintf(stderr,"TKTAuthRequireSSL: %d\n", 	        conf->require_ssl);
 		if (conf->auth_token->nelts > 0) {
 			char ** auth_token = (char **) conf->auth_token->elts;
@@ -715,6 +739,8 @@ void dump_config(request_rec *r) {
 			}
 		}
 		fprintf(stderr,"TKTAuthDebug: %d\n",                conf->debug);
+		fprintf(stderr,"TKTAuthFakeBasicAuth: %d\n", 	    conf->fake_basic_auth);
+		fprintf(stderr,"TKTAuthGracePeriod: %d\n", 	        conf->grace_period);
 		fflush(stderr);
 	}
 }
@@ -729,13 +755,21 @@ static int auth_pubtkt_check(request_rec *r) {
 	auth_pubtkt_serv_conf *sconf = ap_get_module_config(r->server->module_config,
 									&auth_pubtkt_module);
 	const char *scheme = (char*)ap_http_method(r);
+	const char *current_auth = (char*)ap_auth_type(r);
 	char *url = NULL;
 
 	dump_config(r);
 
-	/* Module not configured unless login_url is set */
-	if (!conf->login_url)
+	if (!current_auth || strcasecmp(current_auth, MOD_AUTH_PUBTKT_AUTH_TYPE)) {
 		return DECLINED;
+	}
+
+	/* Module misconfigured unless login_url is set */
+	if (!conf->login_url) {
+		ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
+		    "TKT: TKTAuthLoginURL missing");
+		return HTTP_INTERNAL_SERVER_ERROR;
+	}
 	
 	/* Module misconfigured unless public key set */
 	if (!sconf->pubkey) {
@@ -790,6 +824,13 @@ static int auth_pubtkt_check(request_rec *r) {
 		
 		return redirect(r, url);
 	}
+	
+	/* Attempt to refresh cookie if it will expires - redirect on get if so */
+	if ( !check_grace_period(r, parsed, conf) && strcmp(r->method, "GET") == 0 && conf->refresh_url) {
+		ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
+			"TKT: ticket grace period - redirecting to refresh URL");
+		return redirect(r, conf->refresh_url);
+	}
 
 	/* Check tokens - redirect/unauthorised if so */
 	if (!check_tokens(r, parsed))
@@ -798,14 +839,25 @@ static int auth_pubtkt_check(request_rec *r) {
 	/* Setup apache user, auth_type, and environment variables */
 #ifdef APACHE13
 	r->connection->user = parsed->uid;
-	r->connection->ap_auth_type = "Basic";
+	r->connection->ap_auth_type = MOD_AUTH_PUBTKT_AUTH_TYPE;
 #else
 	r->user = parsed->uid;
-	r->ap_auth_type = "Basic";
+	r->ap_auth_type = MOD_AUTH_PUBTKT_AUTH_TYPE;
 #endif
 	apr_table_set(r->subprocess_env, REMOTE_USER_ENV,        parsed->uid);
 	apr_table_set(r->subprocess_env, REMOTE_USER_DATA_ENV,   parsed->user_data);
 	apr_table_set(r->subprocess_env, REMOTE_USER_TOKENS_ENV, parsed->tokens);
+
+	if( !apr_table_get(r->headers_in, "Authorization") && conf->fake_basic_auth>0 ) {
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+			"TKT: Adding faking basic auth");
+
+		apr_table_set(r->headers_in, "Authorization", 
+			apr_pstrcat(r->pool, "Basic ",
+				ap_pbase64encode(r->pool,
+					apr_pstrcat(r->pool, parsed->uid, ":password", NULL)), NULL));
+
+	}
 
 	return OK;
 }
@@ -844,7 +896,7 @@ module MODULE_VAR_EXPORT auth_pubtkt_module = {
 /* Register hooks */
 static void auth_pubtkt_register_hooks (apr_pool_t *p) {
 	ap_hook_post_config(auth_pubtkt_init, NULL, NULL, APR_HOOK_MIDDLE);
-	ap_hook_check_user_id(auth_pubtkt_check, NULL, NULL, APR_HOOK_FIRST);
+	ap_hook_check_user_id(auth_pubtkt_check, NULL, NULL, APR_HOOK_MIDDLE);
 	ap_hook_child_init(auth_pubtkt_child_init, NULL, NULL, APR_HOOK_FIRST);
 }
 
