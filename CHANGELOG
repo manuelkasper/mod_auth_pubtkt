@@ -1,3 +1,12 @@
+v0.4 (01/18/2009)
+-----------------
+- Replaced TKTAuthGracePeriod directive by graceperiod key in ticket
+  (contributed by Frederic Planchon <frederic@planchon.org>).
+
+- Updated example PHP login page to support ticket refreshing/grace periods
+  (contributed by Frederic Planchon <frederic@planchon.org>).
+
+
 v0.3 (01/13/2009)
 -----------------
 
