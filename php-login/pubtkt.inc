@@ -28,13 +28,17 @@ define("OPENSSL_PATH", "/usr/bin/openssl");
 	Returns:
 		ticket string, or FALSE on failure
 */
-function pubtkt_generate($privkeyfile, $privkeytype, $uid, $clientip, $validuntil, $tokens, $udata) {
+function pubtkt_generate($privkeyfile, $privkeytype, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata) {
 	
 	/* format ticket string */
 	$tkt = "uid=$uid;";
 	if ($clientip)
 		$tkt .= "cip=$clientip;";
-	$tkt .= "validuntil=$validuntil;tokens=$tokens;udata=$udata";
+	$tkt .= "validuntil=$validuntil;";
+	if ( isset($graceperiod) && is_numeric($graceperiod) && $graceperiod > 0 ) {
+		$tkt .= "graceperiod=".($validuntil-$graceperiod).";";
+	}
+	$tkt .= "tokens=$tokens;udata=$udata";
 	
 	if ($privkeytype == "DSA")
 		$algoparam = "-dss1";
@@ -110,6 +114,7 @@ function pubtkt_verify($pubkeyfile, $pubkeytype, $ticket) {
 	fclose($pipes[1]);
 	
 	proc_close($fd);
+	unlink($tmpfn);
 	
 	return ($res === "Verified OK");
 }

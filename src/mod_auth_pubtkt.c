@@ -70,7 +70,6 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->require_ssl = -1;
 	conf->debug = -1;
 	conf->fake_basic_auth = -1;
-	conf->grace_period = -1;
 	return conf;
 }
 
@@ -93,7 +92,6 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->require_ssl = (subdir->require_ssl >= 0) ? subdir->require_ssl : parent->require_ssl;
 	conf->debug = (subdir->debug >= 0) ? subdir->debug : parent->debug;
 	conf->fake_basic_auth = (subdir->fake_basic_auth >= 0) ? subdir->fake_basic_auth : parent->fake_basic_auth;
-	conf->grace_period = (subdir->grace_period >= 0) ? subdir->grace_period : parent->grace_period;
 	
 	return conf;
 }
@@ -303,9 +301,6 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_ITERATE("TKTAuthDebug", set_auth_pubtkt_debug, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, debug),
 		OR_AUTHCFG, "debug level (1-3, higher for more debug output)"),
-	AP_INIT_TAKE1("TKTAuthGracePeriod", ap_set_int_slot, 
-		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, grace_period),
-		OR_AUTHCFG, "Seconds before cookie expires"),
 	{NULL},
 };
 
@@ -339,6 +334,8 @@ static int parse_ticket(request_rec *r, char *ticket, auth_pubtkt *tkt) {
 			strncpy(tkt->clientip, value, sizeof(tkt->clientip)-1);
 		else if (strcmp(key, "validuntil") == 0)
 			tkt->valid_until = atoi(value);
+		else if (strcmp(key, "graceperiod") == 0)
+			tkt->grace_period = atoi(value);
 		else if (strcmp(key, "tokens") == 0)
 			strncpy(tkt->tokens, value, sizeof(tkt->tokens)-1);
 		else if (strcmp(key, "udata") == 0)
@@ -353,8 +350,8 @@ static int parse_ticket(request_rec *r, char *ticket, auth_pubtkt *tkt) {
 
 	if (conf->debug >= 1) {
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r, 
-			"TKT parse_ticket decoded ticket: uid %s, cip %s, validuntil %u, tokens %s, udata %s",
-			tkt->uid, tkt->clientip, tkt->valid_until, tkt->tokens, tkt->user_data);
+			"TKT parse_ticket decoded ticket: uid %s, cip %s, validuntil %u, graceperiod %u, tokens %s, udata %s",
+			tkt->uid, tkt->clientip, tkt->valid_until, tkt->grace_period, tkt->tokens, tkt->user_data);
 	}
   	
 	return 1;
@@ -615,10 +612,10 @@ static int check_timeout(request_rec *r, auth_pubtkt *tkt) {
 
 /* Check whether the given ticket will time out and enter into grace period
  * Returns 1 if okay, 0 if timed out */
-static int check_grace_period(request_rec *r, auth_pubtkt *tkt, auth_pubtkt_dir_conf *conf) {
+static int check_grace_period(request_rec *r, auth_pubtkt *tkt) {
 	time_t now = time(NULL);
 
-	return conf->grace_period<=0 || (now <= (tkt->valid_until - conf->grace_period));
+	return ((tkt->grace_period == 0 ) || (now <= tkt->grace_period));
 }
 
 /* Hex conversion, from httpd util.c */
@@ -740,7 +737,6 @@ void dump_config(request_rec *r) {
 		}
 		fprintf(stderr,"TKTAuthDebug: %d\n",                conf->debug);
 		fprintf(stderr,"TKTAuthFakeBasicAuth: %d\n", 	    conf->fake_basic_auth);
-		fprintf(stderr,"TKTAuthGracePeriod: %d\n", 	        conf->grace_period);
 		fflush(stderr);
 	}
 }
@@ -826,10 +822,10 @@ static int auth_pubtkt_check(request_rec *r) {
 	}
 	
 	/* Attempt to refresh cookie if it will expires - redirect on get if so */
-	if ( !check_grace_period(r, parsed, conf) && strcmp(r->method, "GET") == 0 && conf->refresh_url) {
+	if ( !check_grace_period(r, parsed) && strcmp(r->method, "GET") == 0 ) {
 		ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
 			"TKT: ticket grace period - redirecting to refresh URL");
-		return redirect(r, conf->refresh_url);
+		return redirect(r, (conf->refresh_url ? conf->refresh_url : conf->login_url));
 	}
 
 	/* Check tokens - redirect/unauthorised if so */

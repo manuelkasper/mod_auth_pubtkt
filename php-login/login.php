@@ -18,9 +18,11 @@ $secure_cookie = false;	/* set to true if all your web servers use HTTPS */
 
 $logfile = "private/login.log";
 $privkeyfile = "private/tkt_privkey_dsa.pem";
-$privkeytype = "DSA";
+$pubkeyfile = "private/tkt_pubkey_dsa.pem";
+$keytype = "DSA";
 $localuserdb = "private/users.txt";
 $default_timeout = 86400;
+$default_graceperiod = 3600;
 
 
 /* authenticates the user with the given password against the local
@@ -29,8 +31,9 @@ $default_timeout = 86400;
    success => true/false,
    tokens => array(tokens that should be given to user),
    timeout => how long the ticket should be valid (in seconds)
+   graceperiod => how long the ticket should be refreshed before expiring (in seconds)
 */
-function local_login($username, $password) {
+function get_login_info($username) {
 	global $localuserdb, $default_timeout;
 	
 	$fd = @fopen($localuserdb, "r");
@@ -42,16 +45,32 @@ function local_login($username, $password) {
 			if (!$line)
 				continue;
 			
-			list($cusername,$cpassword,$tokens,$timeout) = explode("\t", $line);
+			list($cusername,$cpassword,$tokens,$timeout,$graceperiod) = explode("\t", $line);
 			
 			if (!$timeout)
 				$timeout = $default_timeout;
 			
+			if (!$graceperiod)
+				$graceperiod = $default_graceperiod;
+			
 			if ($cusername === $username && ($cpassword === $password || $cpassword === md5($password)))
-				return array(success => true, tokens => explode(",", $tokens), 
-					timeout => $timeout);
+				return array(login => $cusername, password => $cpassword, data => array(tokens => explode(",", $tokens), 
+					timeout => $timeout, graceperiod => $graceperiod);
 		}
 		fclose($fd);
+	}
+	
+	return NULL;
+}
+
+function local_login($username, $password) {
+	$user_info = get_login_info($username);
+
+	if( isset($user_info) && is_array($user_info) ) {
+		$out_info = $user_info[data];
+		$out_info[success] = ($user_info[password] === $password || $user_info[password] === md5($password));
+			
+		return $out_info;
 	}
 	
 	return array(success => false);
@@ -99,8 +118,8 @@ if ($_POST) {
 		$tkt_validuntil = time() + $res['timeout'];
 		
 		/* generate the ticket now and set a domain cookie */
-		$tkt = pubtkt_generate($privkeyfile, $privkeytype, $username,
-			$_SERVER['REMOTE_ADDR'], $tkt_validuntil, join(",", $res['tokens']), "");
+		$tkt = pubtkt_generate($privkeyfile, $keytype, $username,
+			$_SERVER['REMOTE_ADDR'], $tkt_validuntil, $res['graceperiod'], join(",", $res['tokens']), "");
 		setcookie("auth_pubtkt", $tkt, 0, "/", $domain, $secure_cookie);
 		
 		setcookie("sso_lastuser", $username, time()+30*24*60*60);
@@ -120,7 +139,40 @@ if ($_POST) {
 		   as that's no necessary at this point. */
 		$ticket = pubtkt_parse($_COOKIE['auth_pubtkt']);
 		$tkt_validuntil = $ticket['validuntil'];
+		$tkt_graceperiod = $ticket['graceperiod'];
 		$tkt_uid = $ticket['uid'];
+
+		/* Checking validity of the ticket and if we are between begin of grace 
+		   period and end of ticket validity. If so we can refresh ticket */
+		if( pubtkt_verify($pubkeyfile, $keytype, $ticket) && isset($tkt_graceperiod)
+		    && is_numeric($tkt_graceperiod) && ($tkt_graceperiod <= time()) 
+		    && (time() <= $tkt_validuntil ) {
+
+			/* getting user information */
+			$user_info = get_login_info($tkt_uid);
+	
+			if ( isset($user_info) && is_array($user_info) ) {
+		
+				$tkt_validuntil = time() + $user_info['data']['timeout'];
+		
+				/* generate the ticket now and set a domain cookie */
+				$tkt = pubtkt_generate($privkeyfile, $keytype, $tkt_uid,
+					$ticket['cip'], $tkt_validuntil, $user_info['data']['graceperiod'], join(",", $user_info['data']['tokens']), "");
+				setcookie("auth_pubtkt", $tkt, 0, "/", $domain, $secure_cookie);
+		
+				setcookie("sso_lastuser", $tkt_uid, time()+30*24*60*60);
+		
+				if ($_GET['back']) {
+					header("Location: " . $_GET['back']);
+					exit;
+				}
+			} else {
+				/* User is not present in userdatabase
+				   He will be deleted so refreshing will
+				   disable its accrediation */
+				setcookie("auth_pubtkt", false, time() - 86400, "/", $domain, $secure_cookie);
+			}
+		}
 	}
 }
 

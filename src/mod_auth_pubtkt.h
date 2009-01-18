@@ -49,7 +49,7 @@
 #define CACHE_SIZE 200			/* number of entries in ticket cache */
 #define MAX_TICKET_SIZE 1024	/* maximum length of raw ticket */
 
-#define PUBTKT_AUTH_VERSION "0.2"
+#define PUBTKT_AUTH_VERSION "0.4"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */
@@ -79,6 +79,7 @@ typedef struct {
 	char			uid[33];
 	char			clientip[40];
 	unsigned int	valid_until;
+	unsigned int	grace_period;
 	char			tokens[256];
 	char			user_data[256];
 } auth_pubtkt;
@@ -137,7 +138,7 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket);
 static int check_tokens(request_rec *r, auth_pubtkt *tkt);
 static int check_clientip(request_rec *r, auth_pubtkt *tkt);
 static int check_timeout(request_rec *r, auth_pubtkt *tkt);
-static int check_grace_period(request_rec *r, auth_pubtkt *tkt, auth_pubtkt_dir_conf *conf);
+static int check_grace_period(request_rec *r, auth_pubtkt *tkt);
 
 static APR_INLINE unsigned char *c2x(unsigned what, unsigned char *where);
 static char *escape_extras(apr_pool_t *p, const char *segment);
