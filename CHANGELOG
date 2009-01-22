@@ -1,3 +1,11 @@
+v0.5 (01/22/2009)
+-----------------
+- Fixed parsing of cookies with escaped spaces ('+')
+  (reported by Iaroslav Vassiliev).
+
+- Fixed errors in login.php example.
+
+
 v0.4 (01/18/2009)
 -----------------
 - Replaced TKTAuthGracePeriod directive by graceperiod key in ticket
@@ -9,7 +17,6 @@ v0.4 (01/18/2009)
 
 v0.3 (01/13/2009)
 -----------------
-
 - Added TKTAuthFakeBasicAuth option (when enabled, adds an Authorization
   header to prevent problems with username logging for requests that are
   handled by PHP), contributed by Frederic Planchon <frederic@planchon.org>.
@@ -21,5 +28,4 @@ v0.3 (01/13/2009)
 
 v0.2 (02/03/2008)
 -----------------
-
 - Initial public release.

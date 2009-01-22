@@ -49,7 +49,7 @@
 #define CACHE_SIZE 200			/* number of entries in ticket cache */
 #define MAX_TICKET_SIZE 1024	/* maximum length of raw ticket */
 
-#define PUBTKT_AUTH_VERSION "0.4"
+#define PUBTKT_AUTH_VERSION "0.5"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */

@@ -386,11 +386,19 @@ static int cookie_match(void *result, const char *key, const char *cookie) {
 			/* Skip empty cookies (such as with misconfigured logoffs) */
 			len = strlen(cookiebuf);
 			if (len > 0) {
+				int i;
+				
 				/* UAs may quote cookie values */
 				if (cookiebuf[len-1] == '"')
 					cookiebuf[len-1] = 0;
 				if (cookiebuf[0] == '"')
 					cookiebuf++;
+				
+				/* Replace '+' by ' ' (not handled by ap_unescape_url_keep2f) */
+				for (i = 0; cookiebuf[i]; i++) {
+					if (cookiebuf[i] == '+')
+						cookiebuf[i] = ' ';
+				}
 				
 				/* URL-unescape cookie */
 				if (ap_unescape_url_keep2f(cookiebuf) != 0) {

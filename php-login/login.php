@@ -24,7 +24,6 @@ $localuserdb = "private/users.txt";
 $default_timeout = 86400;
 $default_graceperiod = 3600;
 
-
 /* authenticates the user with the given password against the local
    user database; returns an array with the following information:
    
@@ -33,8 +32,21 @@ $default_graceperiod = 3600;
    timeout => how long the ticket should be valid (in seconds)
    graceperiod => how long the ticket should be refreshed before expiring (in seconds)
 */
+function local_login($username, $password) {
+	$user_info = get_login_info($username);
+
+	if (isset($user_info) && is_array($user_info)) {
+		$out_info = $user_info['data'];
+		$out_info['success'] = ($user_info['password'] === $password || $user_info['password'] === md5($password));
+			
+		return $out_info;
+	}
+	
+	return array('success' => false);
+}
+
 function get_login_info($username) {
-	global $localuserdb, $default_timeout;
+	global $localuserdb, $default_timeout, $default_graceperiod;
 	
 	$fd = @fopen($localuserdb, "r");
 	if ($fd) {
@@ -53,27 +65,16 @@ function get_login_info($username) {
 			if (!$graceperiod)
 				$graceperiod = $default_graceperiod;
 			
-			if ($cusername === $username && ($cpassword === $password || $cpassword === md5($password)))
-				return array(login => $cusername, password => $cpassword, data => array(tokens => explode(",", $tokens), 
-					timeout => $timeout, graceperiod => $graceperiod);
+			if ($cusername === $username) {
+				fclose($fd);
+				return array('login' => $cusername, 'password' => $cpassword,
+					'data' => array('tokens' => explode(",", $tokens), 'timeout' => $timeout, 'graceperiod' => $graceperiod));
+			}
 		}
 		fclose($fd);
 	}
 	
 	return NULL;
-}
-
-function local_login($username, $password) {
-	$user_info = get_login_info($username);
-
-	if( isset($user_info) && is_array($user_info) ) {
-		$out_info = $user_info[data];
-		$out_info[success] = ($user_info[password] === $password || $user_info[password] === md5($password));
-			
-		return $out_info;
-	}
-	
-	return array(success => false);
 }
 
 /* very simple file-based login auditing */
@@ -144,14 +145,14 @@ if ($_POST) {
 
 		/* Checking validity of the ticket and if we are between begin of grace 
 		   period and end of ticket validity. If so we can refresh ticket */
-		if( pubtkt_verify($pubkeyfile, $keytype, $ticket) && isset($tkt_graceperiod)
+		if (pubtkt_verify($pubkeyfile, $keytype, $ticket) && isset($tkt_graceperiod)
 		    && is_numeric($tkt_graceperiod) && ($tkt_graceperiod <= time()) 
-		    && (time() <= $tkt_validuntil ) {
+		    && (time() <= $tkt_validuntil)) {
 
 			/* getting user information */
 			$user_info = get_login_info($tkt_uid);
 	
-			if ( isset($user_info) && is_array($user_info) ) {
+			if (isset($user_info) && is_array($user_info)) {
 		
 				$tkt_validuntil = time() + $user_info['data']['timeout'];
 		
@@ -167,9 +168,7 @@ if ($_POST) {
 					exit;
 				}
 			} else {
-				/* User is not present in userdatabase
-				   He will be deleted so refreshing will
-				   disable its accrediation */
+				/* User is not present in user database (anymore) - delete the cookie */
 				setcookie("auth_pubtkt", false, time() - 86400, "/", $domain, $secure_cookie);
 			}
 		}
