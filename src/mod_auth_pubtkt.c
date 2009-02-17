@@ -714,7 +714,7 @@ static int redirect(request_rec *r, char *location) {
 	}
 	apr_table_setn(r->headers_out, "Location", url);
 	
-	return HTTP_TEMPORARY_REDIRECT;
+	return (r->proto_num  >= HTTP_VERSION(1,1)) ? HTTP_TEMPORARY_REDIRECT : HTTP_MOVED_TEMPORARILY;
 }
 
 /* ----------------------------------------------------------------------- */
