@@ -4,7 +4,7 @@
 	based on mod_auth_tkt by Open Fusion
 	(http://www.openfusion.com.au/labs/mod_auth_tkt/)
 	
-	Copyright 2008 Manuel Kasper <mk@neon1.net>.
+	Copyright 2008-2009 Manuel Kasper <mk@neon1.net>.
 	
 	See the LICENSE file included in the distribution for the license terms.
 */
@@ -64,8 +64,8 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->post_timeout_url = NULL;
 	conf->unauth_url = NULL;
 	conf->auth_token = apr_array_make(p, 0, sizeof (char *));
-	conf->auth_cookie_name = AUTH_COOKIE_NAME;
-	conf->back_arg_name = BACK_ARG_NAME;
+	conf->auth_cookie_name = NULL;
+	conf->back_arg_name = NULL;
 	conf->refresh_url = NULL;
 	conf->require_ssl = -1;
 	conf->debug = -1;
@@ -430,7 +430,7 @@ static char *get_cookie_ticket(request_rec *r) {
 	cookie_res *cr = apr_palloc(r->pool, sizeof(*cr));
 	cr->r = r;
 	cr->cookie = NULL;
-	cr->cookie_name = conf->auth_cookie_name;
+	cr->cookie_name = (conf->auth_cookie_name) ? conf->auth_cookie_name : AUTH_COOKIE_NAME;
 	apr_table_do(cookie_match, (void*)cr, r->headers_in, "Cookie", NULL);
 	
 	/* Give up if cookie not found or too short */
@@ -660,7 +660,7 @@ static char *escape_extras(apr_pool_t *p, const char *segment) {
 static int redirect(request_rec *r, char *location) {
 	auth_pubtkt_dir_conf *conf = ap_get_module_config(r->per_dir_config, &auth_pubtkt_module);
 	
-	char *back_arg_name = conf->back_arg_name;
+	char *back_arg_name = (conf->back_arg_name) ? conf->back_arg_name : BACK_ARG_NAME;
 	char *query;
 	char *url, *back;
 	const char *hostinfo = 0;

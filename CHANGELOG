@@ -1,3 +1,9 @@
+v0.6 (09/12/2009)
+-----------------
+- Fixed inheritance of TKTAuthCookieName and TKTAuthBackArgName
+  configuration directives
+  (reported by Iaroslav Vassiliev).
+
 - Improved compatibility with HTTP 1.0 (redirect)
   (contributed by Frederic Planchon <frederic@planchon.org>).
 
