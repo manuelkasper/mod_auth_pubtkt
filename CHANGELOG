@@ -1,3 +1,5 @@
+v0.6a (02/23/2010)
+------------------
 - Fixed XSS vulnerability in example php-login/login.php.
   (reported by Thomas Hug).
 
