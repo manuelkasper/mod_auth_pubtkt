@@ -137,7 +137,7 @@ if ($_POST) {
 	if ($_COOKIE['auth_pubtkt']) {
 		/* Extract data from existing cookie so we can nicely offer the user
 		   a logout function. No attempt at verifying the ticket is made,
-		   as that's no necessary at this point. */
+		   as that's not necessary at this point. */
 		$ticket = pubtkt_parse($_COOKIE['auth_pubtkt']);
 		$tkt_validuntil = $ticket['validuntil'];
 		$tkt_graceperiod = $ticket['graceperiod'];
@@ -257,7 +257,7 @@ function readCookie(cookiename) {
 
 <?php if (!$server_allowed): ?>
 
-<p>The server <?php echo $reshost; ?> is unknown.</p>
+<p>The server <?php echo htmlspecialchars($reshost); ?> is unknown.</p>
 
 <?php elseif ($loginsuccess): ?>
 
@@ -273,7 +273,7 @@ function readCookie(cookiename) {
 <?php echo htmlspecialchars($reshost); ?>;<br>you may try logging in again
 with different credentials.</p>
 <?php elseif ($tkt_uid && $tkt_validuntil >= time() && $ticket['cip'] == $_SERVER['REMOTE_ADDR']): ?>
-<p>You are currently logged on as &apos;<?php echo $tkt_uid; ?>&apos;.
+<p>You are currently logged on as &apos;<?php echo htmlspecialchars($tkt_uid); ?>&apos;.
 <form action="logout.php" method="POST">
 <input type="submit" name="logout" value="Logout">
 </form>

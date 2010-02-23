@@ -1,3 +1,7 @@
+- Fixed XSS vulnerability in example php-login/login.php.
+  (reported by Thomas Hug).
+
+
 v0.6 (09/12/2009)
 -----------------
 - Fixed inheritance of TKTAuthCookieName and TKTAuthBackArgName
