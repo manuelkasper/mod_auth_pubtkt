@@ -32,7 +32,7 @@
 #include "apr_base64.h"
 #include "apu_version.h"
 #endif
-#if MODULE_MAGIC_NUMBER >= 20050101
+#ifndef ap_http_method
 #define ap_http_method ap_http_scheme
 #endif
 #if APU_MAJOR_VERSION > 0
