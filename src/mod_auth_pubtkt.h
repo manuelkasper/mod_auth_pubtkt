@@ -47,7 +47,7 @@
 #define REMOTE_USER_TOKENS_ENV "REMOTE_USER_TOKENS"
 #define MIN_AUTH_COOKIE_SIZE 64	/* the Base64-encoded signature alone is >= 64 bytes */
 #define CACHE_SIZE 200			/* number of entries in ticket cache */
-#define MAX_UID_SIZE 32         /* maximum length of uid */
+#define MAX_UID_SIZE 64         /* maximum length of uid */
 #define MAX_TICKET_SIZE 1024	/* maximum length of raw ticket */
 
 #define PUBTKT_AUTH_VERSION "0.6"
