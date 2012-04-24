@@ -39,7 +39,7 @@ rm -rf %{buildroot}
 %files
 %defattr(-,root,root,-)
 %{_libdir}/httpd/modules/*.so
-%{_sysconfdir}/httpd/conf.d/auth_pubtkt.conf
+%config %{_sysconfdir}/httpd/conf.d/auth_pubtkt.conf
 
 %changelog
 * Sat Sep 19 2009 Omachonu Ogali <oogali@currenex.com> 0.6-0
