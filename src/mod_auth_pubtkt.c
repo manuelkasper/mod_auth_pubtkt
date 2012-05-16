@@ -67,6 +67,7 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->auth_cookie_name = NULL;
 	conf->back_arg_name = NULL;
 	conf->refresh_url = NULL;
+	conf->badip_url = NULL;
 	conf->require_ssl = -1;
 	conf->debug = -1;
 	conf->fake_basic_auth = -1;
@@ -89,6 +90,7 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->auth_cookie_name = (subdir->auth_cookie_name) ? subdir->auth_cookie_name : parent->auth_cookie_name;
 	conf->back_arg_name = (subdir->back_arg_name) ? subdir->back_arg_name : parent->back_arg_name;
 	conf->refresh_url = (subdir->refresh_url) ? subdir->refresh_url : parent->refresh_url;
+	conf->badip_url = (subdir->badip_url) ? subdir->badip_url : parent->badip_url;
 	conf->require_ssl = (subdir->require_ssl >= 0) ? subdir->require_ssl : parent->require_ssl;
 	conf->debug = (subdir->debug >= 0) ? subdir->debug : parent->debug;
 	conf->fake_basic_auth = (subdir->fake_basic_auth >= 0) ? subdir->fake_basic_auth : parent->fake_basic_auth;
@@ -287,6 +289,9 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_TAKE1("TKTAuthRefreshURL", ap_set_string_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, refresh_url),
 		OR_AUTHCFG, "URL to redirect to if cookie reach grace period"),
+	AP_INIT_TAKE1("TKTAuthBadIPURL", ap_set_string_slot, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, badip_url),
+		OR_AUTHCFG, "URL to redirect to if request IP doesn't match cookie IP"),
 	AP_INIT_FLAG("TKTAuthRequireSSL", ap_set_flag_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, require_ssl),
 		OR_AUTHCFG, "whether to refuse non-HTTPS requests"),
@@ -735,6 +740,7 @@ void dump_config(request_rec *r) {
 		fprintf(stderr,"TKTAuthCookieName: %s\n", 	        conf->auth_cookie_name);
 		fprintf(stderr,"TKTAuthBackArgName: %s\n",	        conf->back_arg_name);
 		fprintf(stderr,"TKTAuthRefreshURL: %s\n",	        conf->refresh_url);
+		fprintf(stderr,"TKTAuthBadIPURL: %s\n", 	        conf->badip_url);
 		fprintf(stderr,"TKTAuthRequireSSL: %d\n", 	        conf->require_ssl);
 		if (conf->auth_token->nelts > 0) {
 			char ** auth_token = (char **) conf->auth_token->elts;
@@ -809,10 +815,10 @@ static int auth_pubtkt_check(request_rec *r) {
 	/* Check client IP address (if present in ticket) */
 	if (!check_clientip(r, parsed)) {
 		ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
-			"TKT: client IP mismatch (ticket: %s, request: %s) - redirecting to login URL",
+			"TKT: client IP mismatch (ticket: %s, request: %s) - redirecting to badip URL",
 			parsed->clientip, r->connection->remote_ip);
 		
-		return redirect(r, conf->login_url);
+		return redirect(r, (conf->badip_url ? conf->badip_url : conf->login_url));
 	}
 
 	/* Valid ticket, check timeout - redirect/timed-out if so */

@@ -63,6 +63,7 @@ typedef struct  {
 	char				*auth_cookie_name;
 	char				*back_arg_name;
 	char				*refresh_url;
+	char				*badip_url;
 	apr_array_header_t	*auth_token;
 	int					require_ssl;
 	int					debug;
