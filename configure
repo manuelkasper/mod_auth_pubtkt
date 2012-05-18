@@ -72,7 +72,8 @@ test $VERSION = '1'   && VERSION=1.3
 test $VERSION = '2.0' && VERSION=2
 test $VERSION = '20'  && VERSION=2
 test $VERSION = '22'  && VERSION=2.2
-if [ $VERSION != '1.3' -a $VERSION != '2' -a $VERSION != '2.2' ]; then
+test $VERSION = '24'  && VERSION=2.4
+if [ $VERSION != '1.3' -a $VERSION != '2' -a $VERSION != '2.2' -a $VERSION != '2.4' ]; then
   die "Error: apache version '$VERSION' not supported"
 fi
 
@@ -94,6 +95,8 @@ if [ "$VERSION" = "1.3" ]; then
 else
   if [ $VERSION = "2.2" ]; then
     echo "CFLAGS += -DAPACHE22" >> Makedefs
+  elif [ $VERSION = "2.4" ]; then
+	echo "CFLAGS += -DAPACHE24" >> Makedefs
   fi
   echo "TARGET = mod_auth_pubtkt.la" >> Makedefs
 fi

@@ -406,7 +406,11 @@ static int cookie_match(void *result, const char *key, const char *cookie) {
 				}
 				
 				/* URL-unescape cookie */
+#ifdef APACHE24
+				if (ap_unescape_url_keep2f(cookiebuf, 1) != 0) {
+#else
 				if (ap_unescape_url_keep2f(cookiebuf) != 0) {
+#endif
 					ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, cr->r, 
 						"TKT cookie_match: error while URL-unescaping cookie");
 					continue;
@@ -612,7 +616,11 @@ static int check_clientip(request_rec *r, auth_pubtkt *tkt) {
 	if (!tkt->clientip[0])
 		return 1;		/* no clientip in ticket */
 	
+#if AP_MODULE_MAGIC_AT_LEAST(20111130,0)
+	return (strcmp(tkt->clientip, r->connection->client_ip) == 0);
+#else
 	return (strcmp(tkt->clientip, r->connection->remote_ip) == 0);
+#endif
 }
   
 /* Check whether the given ticket has timed out 
@@ -816,7 +824,13 @@ static int auth_pubtkt_check(request_rec *r) {
 	if (!check_clientip(r, parsed)) {
 		ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
 			"TKT: client IP mismatch (ticket: %s, request: %s) - redirecting to badip URL",
-			parsed->clientip, r->connection->remote_ip);
+			parsed->clientip,
+#if AP_MODULE_MAGIC_AT_LEAST(20111130,0)
+			r->connection->client_ip
+#else
+			r->connection->remote_ip
+#endif
+		);
 		
 		return redirect(r, (conf->badip_url ? conf->badip_url : conf->login_url));
 	}
