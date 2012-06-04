@@ -671,6 +671,9 @@ static char *escape_extras(apr_pool_t *p, const char *segment) {
 
 /* External redirect to the given url, setting 'back' argument */
 static int redirect(request_rec *r, char *location) {
+	if (!location) {
+		return HTTP_FORBIDDEN;
+	}
 	auth_pubtkt_dir_conf *conf = ap_get_module_config(r->per_dir_config, &auth_pubtkt_module);
 	
 	char *back_arg_name = (conf->back_arg_name) ? conf->back_arg_name : BACK_ARG_NAME;
@@ -780,13 +783,6 @@ static int auth_pubtkt_check(request_rec *r) {
 
 	if (!current_auth || strcasecmp(current_auth, MOD_AUTH_PUBTKT_AUTH_TYPE)) {
 		return DECLINED;
-	}
-
-	/* Module misconfigured unless login_url is set */
-	if (!conf->login_url) {
-		ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
-		    "TKT: TKTAuthLoginURL missing");
-		return HTTP_INTERNAL_SERVER_ERROR;
 	}
 	
 	/* Module misconfigured unless public key set */
