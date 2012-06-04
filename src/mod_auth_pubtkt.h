@@ -69,12 +69,8 @@ typedef struct  {
 	int					debug;
 	int					fake_basic_auth;
 	int					grace_period;
+	EVP_PKEY			*pubkey;	/* public key for signature verification */
 } auth_pubtkt_dir_conf;
-
-/* Per-server configuration */
-typedef struct {
-	EVP_PKEY	*pubkey;	/* public key for signature verification */
-} auth_pubtkt_serv_conf;
 
 /* Ticket structure */
 typedef struct {
@@ -121,8 +117,6 @@ static void auth_pubtkt_child_init(apr_pool_t *p, server_rec *s);
 
 static void* create_auth_pubtkt_config(apr_pool_t *p, char* path);
 static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* subdirv);
-static void *create_auth_pubtkt_serv_config(apr_pool_t *p, server_rec* s);
-static void *merge_auth_pubtkt_serv_config(apr_pool_t *p, void* parent_dirv, void* subdirv);
 
 static void cache_init(apr_pool_t *p, server_rec* s);
 static int cache_get(const char* ticket, auth_pubtkt *tkt);

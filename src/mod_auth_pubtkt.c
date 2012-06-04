@@ -71,6 +71,7 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->require_ssl = -1;
 	conf->debug = -1;
 	conf->fake_basic_auth = -1;
+	conf->pubkey = NULL;
 	return conf;
 }
 
@@ -94,25 +95,8 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->require_ssl = (subdir->require_ssl >= 0) ? subdir->require_ssl : parent->require_ssl;
 	conf->debug = (subdir->debug >= 0) ? subdir->debug : parent->debug;
 	conf->fake_basic_auth = (subdir->fake_basic_auth >= 0) ? subdir->fake_basic_auth : parent->fake_basic_auth;
-	
-	return conf;
-}
-
-/* Create per-server config structures */
-static void *create_auth_pubtkt_serv_config(apr_pool_t *p, server_rec* s) {
-	auth_pubtkt_serv_conf *conf = apr_palloc(p, sizeof(*conf));
-	conf->pubkey = NULL;
-	
-	return conf;
-} 
-
-/* Merge per-server config structures */
-static void *merge_auth_pubtkt_serv_config(apr_pool_t *p, void* parent_dirv, void* subdirv) {
-	auth_pubtkt_serv_conf *parent = (auth_pubtkt_serv_conf*)parent_dirv;
-	auth_pubtkt_serv_conf *subdir = (auth_pubtkt_serv_conf*)subdirv;
-	auth_pubtkt_serv_conf *conf = apr_palloc(p, sizeof(*conf));
-	
 	conf->pubkey = (subdir->pubkey) ? subdir->pubkey : parent->pubkey;
+	
 	return conf;
 }
 
@@ -224,7 +208,7 @@ static const char *set_auth_pubtkt_token(cmd_parms *cmd, void *cfg, const char *
 static const char *setup_pubkey(cmd_parms *cmd, void *cfg, const char *param) {
 	FILE *fkey;
 	const char *pubkeypath;
-	auth_pubtkt_serv_conf *sconf = ap_get_module_config(cmd->server->module_config, &auth_pubtkt_module);
+	auth_pubtkt_dir_conf *conf = (auth_pubtkt_dir_conf*)cfg;
 
 	/* read public key file */
 	pubkeypath = ap_server_root_relative(cmd->pool, (char*)param);
@@ -236,18 +220,18 @@ static const char *setup_pubkey(cmd_parms *cmd, void *cfg, const char *param) {
 	if (fkey == NULL)
 		return apr_psprintf(cmd->pool, "unable to open public key file '%s'", pubkeypath);
 	
-	sconf->pubkey = PEM_read_PUBKEY(fkey, NULL, NULL, NULL);
+	conf->pubkey = PEM_read_PUBKEY(fkey, NULL, NULL, NULL);
 	fclose(fkey);
 	
-	if (sconf->pubkey == NULL)
+	if (conf->pubkey == NULL)
 		return apr_psprintf(cmd->pool, "unable to read public key file '%s': %s",
 			pubkeypath, ERR_reason_error_string(ERR_get_error()));
 	
 	/* check key type */
-	if (!(sconf->pubkey->type == EVP_PKEY_RSA || sconf->pubkey->type == EVP_PKEY_RSA2 ||
-		  sconf->pubkey->type == EVP_PKEY_DSA || sconf->pubkey->type == EVP_PKEY_DSA1 || sconf->pubkey->type == EVP_PKEY_DSA2 ||
-		  sconf->pubkey->type == EVP_PKEY_DSA3 || sconf->pubkey->type == EVP_PKEY_DSA4))
-		return apr_psprintf(cmd->pool, "unsupported key type %d", sconf->pubkey->type);
+	if (!(conf->pubkey->type == EVP_PKEY_RSA || conf->pubkey->type == EVP_PKEY_RSA2 ||
+		  conf->pubkey->type == EVP_PKEY_DSA || conf->pubkey->type == EVP_PKEY_DSA1 || conf->pubkey->type == EVP_PKEY_DSA2 ||
+		  conf->pubkey->type == EVP_PKEY_DSA3 || conf->pubkey->type == EVP_PKEY_DSA4))
+		return apr_psprintf(cmd->pool, "unsupported key type %d", conf->pubkey->type);
 	
 	return NULL;
 }
@@ -302,7 +286,8 @@ static const command_rec auth_pubtkt_cmds[] =
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, auth_token),
 		OR_AUTHCFG, "token required to access this area (NULL for none)"),
 	AP_INIT_TAKE1("TKTAuthPublicKey", setup_pubkey, 
-		NULL, RSRC_CONF, "public key file to use in MD5 digest"),
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, pubkey),
+		OR_ALL, "public key file to use for verifying signatures"),
 	AP_INIT_ITERATE("TKTAuthDebug", set_auth_pubtkt_debug, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, debug),
 		OR_AUTHCFG, "debug level (1-3, higher for more debug output)"),
@@ -454,7 +439,6 @@ static char *get_cookie_ticket(request_rec *r) {
 static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 
 	auth_pubtkt_dir_conf *conf = ap_get_module_config(r->per_dir_config, &auth_pubtkt_module);
-	auth_pubtkt_serv_conf *sconf = ap_get_module_config(r->server->module_config, &auth_pubtkt_module);
 	char *sigptr, *sig_buf;
 	char *tktval_buf;
 	int sig_len;
@@ -515,11 +499,11 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 			tktval_buf, sigptr);
 	}
 	
-	if (sconf->pubkey->type == EVP_PKEY_RSA || sconf->pubkey->type == EVP_PKEY_RSA2)
+	if (conf->pubkey->type == EVP_PKEY_RSA || conf->pubkey->type == EVP_PKEY_RSA2)
 		impl = EVP_sha1();
-	else if (sconf->pubkey->type == EVP_PKEY_DSA || sconf->pubkey->type == EVP_PKEY_DSA1 ||
-			 sconf->pubkey->type == EVP_PKEY_DSA2 || sconf->pubkey->type == EVP_PKEY_DSA3 ||
-			 sconf->pubkey->type == EVP_PKEY_DSA4)
+	else if (conf->pubkey->type == EVP_PKEY_DSA || conf->pubkey->type == EVP_PKEY_DSA1 ||
+			 conf->pubkey->type == EVP_PKEY_DSA2 || conf->pubkey->type == EVP_PKEY_DSA3 ||
+			 conf->pubkey->type == EVP_PKEY_DSA4)
 		impl = EVP_dss1();
 	else {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
@@ -541,7 +525,7 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 		return NULL;
 	}
 	
-	if (EVP_VerifyFinal(&ctx, (unsigned char*)sig_buf, sig_len, sconf->pubkey) != 1) {
+	if (EVP_VerifyFinal(&ctx, (unsigned char*)sig_buf, sig_len, conf->pubkey) != 1) {
 		unsigned long lasterr;
 		char *errbuf = apr_palloc(r->pool, 120);
 	
@@ -773,8 +757,6 @@ static int auth_pubtkt_check(request_rec *r) {
 	auth_pubtkt *parsed;
 	auth_pubtkt_dir_conf *conf = ap_get_module_config(r->per_dir_config,
 									&auth_pubtkt_module);
-	auth_pubtkt_serv_conf *sconf = ap_get_module_config(r->server->module_config,
-									&auth_pubtkt_module);
 	const char *scheme = (char*)ap_http_method(r);
 	const char *current_auth = (char*)ap_auth_type(r);
 	char *url = NULL;
@@ -786,7 +768,7 @@ static int auth_pubtkt_check(request_rec *r) {
 	}
 	
 	/* Module misconfigured unless public key set */
-	if (!sconf->pubkey) {
+	if (!conf->pubkey) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r, 
 			"TKT: TKTAuthPublicKey missing");
 		return HTTP_INTERNAL_SERVER_ERROR;
@@ -893,8 +875,8 @@ module MODULE_VAR_EXPORT auth_pubtkt_module = {
 	auth_pubtkt_init,					/* initializer */
 	create_auth_pubtkt_config,			/* create per-dir    config structures */
 	merge_auth_pubtkt_config,			/* merge  per-dir    config structures */
-	create_auth_pubtkt_serv_config,		/* create per-server config structures */
-	merge_auth_pubtkt_serv_config,		/* merge  per-server config structures */
+	NULL,								/* create per-server config structures */
+	NULL,								/* merge  per-server config structures */
 	auth_pubtkt_cmds,					/* table of config file commands       */
 	NULL,								/* handlers */
 	NULL,								/* filename translation */
@@ -925,8 +907,8 @@ module AP_MODULE_DECLARE_DATA auth_pubtkt_module = {
   STANDARD20_MODULE_STUFF, 
   create_auth_pubtkt_config,		/* create per-dir    config structures */
   merge_auth_pubtkt_config,			/* merge  per-dir    config structures */
-  create_auth_pubtkt_serv_config,	/* create per-server config structures */
-  merge_auth_pubtkt_serv_config,	/* merge  per-server config structures */
+  NULL,								/* create per-server config structures */
+  NULL,								/* merge  per-server config structures */
   auth_pubtkt_cmds,					/* table of config file commands       */
   auth_pubtkt_register_hooks		/* register hooks                      */
 };
