@@ -655,9 +655,6 @@ static char *escape_extras(apr_pool_t *p, const char *segment) {
 
 /* External redirect to the given url, setting 'back' argument */
 static int redirect(request_rec *r, char *location) {
-	if (!location) {
-		return HTTP_FORBIDDEN;
-	}
 	auth_pubtkt_dir_conf *conf = ap_get_module_config(r->per_dir_config, &auth_pubtkt_module);
 	
 	char *back_arg_name = (conf->back_arg_name) ? conf->back_arg_name : BACK_ARG_NAME;
@@ -676,6 +673,10 @@ static int redirect(request_rec *r, char *location) {
 		query = "";
 	else
 		query = apr_psprintf(r->pool, "?%s", r_main->args); 
+	
+	if (!location) {
+		return HTTP_FORBIDDEN;
+	}
 	
 	/* Build back URL */
 	/* Use X-Forward-Host header for host:port info if available */
