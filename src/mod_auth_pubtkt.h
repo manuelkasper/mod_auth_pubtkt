@@ -50,7 +50,7 @@
 #define MAX_UID_SIZE 64         /* maximum length of uid */
 #define MAX_TICKET_SIZE 1024	/* maximum length of raw ticket */
 
-#define PUBTKT_AUTH_VERSION "0.6"
+#define PUBTKT_AUTH_VERSION "0.7"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */

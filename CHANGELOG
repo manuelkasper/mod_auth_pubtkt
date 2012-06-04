@@ -1,3 +1,26 @@
+v0.7 (06/04/2012)
+-----------------
+- TKTAuthPublicKey can now be set per directory/location (it is
+  still possible to set a global default key, so existing configurations
+  do not need to be changed)
+  (contributed by Ivo De Decker).
+
+- TKTAuthLoginURL is now optional; if not provided, users without
+  a valid ticket will simply get an HTTP forbidden error
+  (contributed by Ivo De Decker).
+
+- Added Perl ticket generation module
+  (contributed by Assaf Gordon).
+
+- Module now compiles with Apache 2.4.
+
+- Added TKTAuthBadIPURL option
+  (contributed by John Wittkoski).
+
+- Increased max. UID length to 64 (from 32); can be changed by
+  modifying MAX_UID_SIZE.
+
+
 v0.6a (02/23/2010)
 ------------------
 - Fixed XSS vulnerability in example php-login/login.php.
