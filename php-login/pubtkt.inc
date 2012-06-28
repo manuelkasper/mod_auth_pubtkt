@@ -24,11 +24,13 @@ define("OPENSSL_PATH", "/usr/bin/openssl");
 		validuntil		expiration timestamp (e.g. time() + 86400)
 		tokens			comma-separated list of tokens (optional)
 		udata			user data (optional)
+		bauth			basic auth username:password (for passthru, optional;
+						can optionally use pubtkt_encrypt_bauth() to encrypt it)
 	
 	Returns:
 		ticket string, or FALSE on failure
 */
-function pubtkt_generate($privkeyfile, $privkeytype, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata) {
+function pubtkt_generate($privkeyfile, $privkeytype, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata, $bauth = null) {
 	
 	/* format ticket string */
 	$tkt = "uid=$uid;";
@@ -38,6 +40,8 @@ function pubtkt_generate($privkeyfile, $privkeytype, $uid, $clientip, $validunti
 	if ( isset($graceperiod) && is_numeric($graceperiod) && $graceperiod > 0 ) {
 		$tkt .= "graceperiod=".($validuntil-$graceperiod).";";
 	}
+	if (!empty($bauth))
+		$tkt .= "bauth=" . base64_encode($bauth) . ";";
 	$tkt .= "tokens=$tokens;udata=$udata";
 	
 	if ($privkeytype == "DSA")
@@ -132,6 +136,26 @@ function pubtkt_parse($ticket) {
 	}
 	
 	return $tkt;
+}
+
+/*	Encrypt a "bauth" passthru basic authentication value
+	(username:password) with the given key (must be exactly 16
+	characters and match the key configured on the server). The
+	result is in binary, but can be passed to pubtkt_generate()
+	directly, as it will be Base64-encoded.
+	Requires Mcrypt! */
+function pubtkt_encrypt_bauth($bauth, $key) {
+	if (strlen($key) != 16)
+		return null;
+	
+	$td = mcrypt_module_open(MCRYPT_RIJNDAEL_128, '', MCRYPT_MODE_CBC, '');
+	$iv = mcrypt_create_iv(mcrypt_enc_get_iv_size($td), MCRYPT_DEV_URANDOM);
+	mcrypt_generic_init($td, $key, $iv);
+	$encrypted = mcrypt_generic($td, $bauth);
+	mcrypt_generic_deinit($td);
+	mcrypt_module_close($td);
+
+	return $iv . $encrypted;
 }
 
 ?>

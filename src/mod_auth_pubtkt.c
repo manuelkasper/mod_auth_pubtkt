@@ -71,7 +71,9 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->require_ssl = -1;
 	conf->debug = -1;
 	conf->fake_basic_auth = -1;
+	conf->passthru_basic_auth = -1;
 	conf->pubkey = NULL;
+	conf->passthru_basic_key = NULL;
 	return conf;
 }
 
@@ -95,7 +97,9 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->require_ssl = (subdir->require_ssl >= 0) ? subdir->require_ssl : parent->require_ssl;
 	conf->debug = (subdir->debug >= 0) ? subdir->debug : parent->debug;
 	conf->fake_basic_auth = (subdir->fake_basic_auth >= 0) ? subdir->fake_basic_auth : parent->fake_basic_auth;
+	conf->passthru_basic_auth = (subdir->passthru_basic_auth >= 0) ? subdir->passthru_basic_auth : parent->passthru_basic_auth;
 	conf->pubkey = (subdir->pubkey) ? subdir->pubkey : parent->pubkey;
+	conf->passthru_basic_key = (subdir->passthru_basic_key) ? subdir->passthru_basic_key : parent->passthru_basic_key;
 	
 	return conf;
 }
@@ -235,6 +239,17 @@ static const char *setup_pubkey(cmd_parms *cmd, void *cfg, const char *param) {
 	
 	return NULL;
 }
+ 
+static const char *setup_passthru_basic_key(cmd_parms *cmd, void *cfg, const char *param) {
+	auth_pubtkt_dir_conf *conf = (auth_pubtkt_dir_conf*)cfg;
+	
+	if (strlen(param) != PASSTHRU_AUTH_KEY_SIZE)
+		return apr_psprintf(cmd->pool, "wrong length of passthru basic auth key");
+	
+	conf->passthru_basic_key = param;
+	
+	return NULL;
+}
 
 static const char *set_auth_pubtkt_debug(cmd_parms *cmd, void *cfg, const char *param) {
 	auth_pubtkt_dir_conf *conf = (auth_pubtkt_dir_conf*)cfg;
@@ -282,12 +297,18 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_FLAG("TKTAuthFakeBasicAuth", ap_set_flag_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, fake_basic_auth),
 		OR_AUTHCFG, "whether to refuse non-HTTPS requests"),
+	AP_INIT_FLAG("TKTAuthPassthruBasicAuth", ap_set_flag_slot, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, passthru_basic_auth),
+		OR_AUTHCFG, "whether to add a basic Authorization header based on ticket field 'bauth'"),
 	AP_INIT_ITERATE("TKTAuthToken", set_auth_pubtkt_token, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, auth_token),
 		OR_AUTHCFG, "token required to access this area (NULL for none)"),
 	AP_INIT_TAKE1("TKTAuthPublicKey", setup_pubkey, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, pubkey),
 		OR_ALL, "public key file to use for verifying signatures"),
+	AP_INIT_TAKE1("TKTAuthPassthruBasicKey", setup_passthru_basic_key, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, pubkey),
+		OR_ALL, "key to use for decrypting passthru field, must be exactly 16 characters"),
 	AP_INIT_ITERATE("TKTAuthDebug", set_auth_pubtkt_debug, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, debug),
 		OR_AUTHCFG, "debug level (1-3, higher for more debug output)"),
@@ -330,6 +351,8 @@ static int parse_ticket(request_rec *r, char *ticket, auth_pubtkt *tkt) {
 			strncpy(tkt->tokens, value, sizeof(tkt->tokens)-1);
 		else if (strcmp(key, "udata") == 0)
 			strncpy(tkt->user_data, value, sizeof(tkt->user_data)-1);
+		else if (strcmp(key, "bauth") == 0)
+			strncpy(tkt->bauth, value, sizeof(tkt->bauth)-1);
 	}
 	
 	if (!tkt->uid[0] || tkt->valid_until == 0) {
@@ -340,8 +363,8 @@ static int parse_ticket(request_rec *r, char *ticket, auth_pubtkt *tkt) {
 
 	if (conf->debug >= 1) {
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r, 
-			"TKT parse_ticket decoded ticket: uid %s, cip %s, validuntil %u, graceperiod %u, tokens %s, udata %s",
-			tkt->uid, tkt->clientip, tkt->valid_until, tkt->grace_period, tkt->tokens, tkt->user_data);
+			"TKT parse_ticket decoded ticket: uid %s, cip %s, validuntil %u, graceperiod %u, tokens %s, udata %s, bauth %s",
+			tkt->uid, tkt->clientip, tkt->valid_until, tkt->grace_period, tkt->tokens, tkt->user_data, tkt->bauth);
 	}
   	
 	return 1;
@@ -747,6 +770,7 @@ void dump_config(request_rec *r) {
 		}
 		fprintf(stderr,"TKTAuthDebug: %d\n",                conf->debug);
 		fprintf(stderr,"TKTAuthFakeBasicAuth: %d\n", 	    conf->fake_basic_auth);
+		fprintf(stderr,"TKTAuthPassthruBasicAuth: %d\n", 	conf->passthru_basic_auth);
 		fflush(stderr);
 	}
 }
@@ -851,15 +875,72 @@ static int auth_pubtkt_check(request_rec *r) {
 	apr_table_set(r->subprocess_env, REMOTE_USER_DATA_ENV,   parsed->user_data);
 	apr_table_set(r->subprocess_env, REMOTE_USER_TOKENS_ENV, parsed->tokens);
 
-	if( !apr_table_get(r->headers_in, "Authorization") && conf->fake_basic_auth>0 ) {
-		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
-			"TKT: Adding faking basic auth");
+	if (!apr_table_get(r->headers_in, "Authorization")) {
+		if (conf->passthru_basic_auth > 0 && parsed->bauth[0]) {
+			if (conf->debug >= 1)
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+					"TKT: Adding passthru basic auth");
+			
+			/* need to decrypt bauth? */
+			char *bauth = parsed->bauth;
+			if (conf->passthru_basic_key != NULL) {
+				EVP_CIPHER_CTX ctx;
+				char *decoded, *decrypted;
+				int len = 0, declen = 0;
+				
+				if (conf->debug >= 2)
+					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+						"TKT: Decrypting passthru basic auth");
+				
+				/* base64 decode first */
+				decoded = (char *) apr_palloc(r->pool, 1 + apr_base64_decode_len(parsed->bauth));
+			    len = apr_base64_decode(decoded, parsed->bauth);
+					
+				if (len <= PASSTHRU_AUTH_IV_SIZE) {
+					ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, r,
+						"TKT: Bad encrypted passthru length %d", len);
+				} else {
+					/* Decrypt */
+					int tlen;
+					decrypted = (char*)apr_palloc(r->pool, len+1);
+					EVP_CIPHER_CTX_init(&ctx);
+					EVP_DecryptInit(&ctx, EVP_aes_128_cbc(), conf->passthru_basic_key, decoded);
+					EVP_CIPHER_CTX_set_padding(&ctx, 0);
+					if (EVP_DecryptUpdate(&ctx, decrypted, &declen, &decoded[PASSTHRU_AUTH_IV_SIZE], len - PASSTHRU_AUTH_IV_SIZE) != 1) {
+						ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
+							"TKT: passthru decryption failed");
+						EVP_CIPHER_CTX_cleanup(&ctx);
+						return HTTP_INTERNAL_SERVER_ERROR;
+					}
+					if (EVP_DecryptFinal(&ctx, decrypted + declen, &tlen) != 1) {
+						ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
+							"TKT: passthru decryption failed");
+						EVP_CIPHER_CTX_cleanup(&ctx);
+						return HTTP_INTERNAL_SERVER_ERROR;
+					}
+					EVP_CIPHER_CTX_cleanup(&ctx);
+					
+					decrypted[declen] = 0;
+					
+					if (conf->debug >= 3)
+						ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+							"TKT: Decrypted passthru auth is %s", decrypted);
+					bauth = ap_pbase64encode(r->pool, decrypted);
+				}
+			}
+			
+			apr_table_set(r->headers_in, "Authorization", 
+				apr_pstrcat(r->pool, "Basic ", bauth, NULL));
+		} else if (conf->fake_basic_auth > 0) {
+			if (conf->debug >= 1)
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+					"TKT: Adding fake basic auth");
 
-		apr_table_set(r->headers_in, "Authorization", 
-			apr_pstrcat(r->pool, "Basic ",
-				ap_pbase64encode(r->pool,
-					apr_pstrcat(r->pool, parsed->uid, ":password", NULL)), NULL));
-
+			apr_table_set(r->headers_in, "Authorization", 
+				apr_pstrcat(r->pool, "Basic ",
+					ap_pbase64encode(r->pool,
+						apr_pstrcat(r->pool, parsed->uid, ":password", NULL)), NULL));
+		}
 	}
 
 	return OK;

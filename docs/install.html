@@ -171,6 +171,22 @@ AddModule mod_auth_pubtkt.c		# Apache 1.3 only
 			<li>Default: off</li>
 		</ul>
 	</li>
+	<li><strong><code>TKTAuthPassthruBasicAuth</code> (since v0.8)</strong>
+		<ul>
+			<li>if on, the value from the ticket's "bauth" field will be added to the request as a Basic Authorization header. This can be used
+				in reverse proxy situations where one needs complete control over the username and password (see also TKTAuthFakeBasicAuth, which should
+				not be used at the same time).</li>
+			<li>Default: off</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthPassthruBasicKey</code> (since v0.8)</strong>
+		<ul>
+			<li>if set, the bauth value will be decrypted using the given key before it is added
+				to the Authorization header.</li>
+			<li>see <a href="#ticket_format">Ticket format</a> for details on the encryption</li>
+			<li>length must be exactly 16 characters</li>
+		</ul>
+	</li>
 	<li><strong><code>TKTAuthDebug</code></strong>
 		<ul>
 			<li>debug level (1-3, higher for more debug output)</li>
@@ -226,6 +242,19 @@ AddModule mod_auth_pubtkt.c		# Apache 1.3 only
 			<li>a UNIX timestamp (should be <strong>before</strong> the ticket's expiration date)
 				after which GET requests will be redirected to the refresh URL
 				(or the login URL, if no refresh URL is set)</li>
+		</ul>
+	</li>
+	<li>bauth (optional; since v0.8)
+		<ul>
+			<li>Base64 encoded value for Authorization header (when TKTAuthPassthruBasicAuth is enabled).</li>
+			<li>Can optionally be encrypted (TKTAuthPassthruBasicKey option)
+				<ul>
+					<li>encryption is AES-128-CBC, zero padded (not PKCS7), IV in first 16 bytes</li>
+					<li>the plaintext username:password string should be encrypted, and the
+						(binary) result after encryption Base64 encoded before being added to the ticket</li>
+					<li>for an encryption example using Mcrypt, see the included php-login/pubtkt.inc</li>
+				</ul>
+			</li>
 		</ul>
 	</li>
 	<li>sig (required)

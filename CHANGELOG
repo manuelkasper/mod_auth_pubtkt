@@ -1,3 +1,12 @@
+v0.8 (06/28/2012)
+-----------------
+- new option TKTAuthPassthruBasicAuth and corresponding field in ticket
+  ("bauth") makes it possible to specify the Basic authorization
+  username/password in the ticket (e.g. when reverse proxying to a
+  third party system that cannot use mod_auth_pubtkt).
+  The credentials can optionally be encrypted in the ticket (AES-128-CBC).
+
+
 v0.7 (06/04/2012)
 -----------------
 - TKTAuthPublicKey can now be set per directory/location (it is

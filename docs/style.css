@@ -52,6 +52,21 @@ pre {
 	font-size: 0.8em;
 }
 
+ul {
+	margin-bottom: 0.5em;
+}
+
+ul li {
+	margin-top: 0.2em;
+	margin-bottom: 0.2em;
+}
+
+ul li ul li {
+	font-size: 0.9em;
+	margin-top: 0.2em;
+	margin-bottom: 0.2em;
+}
+
 ul.versionlist li {
 	margin-bottom: 1em;
 }

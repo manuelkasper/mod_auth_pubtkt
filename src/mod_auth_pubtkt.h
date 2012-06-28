@@ -49,8 +49,10 @@
 #define CACHE_SIZE 200			/* number of entries in ticket cache */
 #define MAX_UID_SIZE 64         /* maximum length of uid */
 #define MAX_TICKET_SIZE 1024	/* maximum length of raw ticket */
+#define PASSTHRU_AUTH_KEY_SIZE 16	/* length of symmetric key for passthru basic auth encryption */
+#define PASSTHRU_AUTH_IV_SIZE 16
 
-#define PUBTKT_AUTH_VERSION "0.7"
+#define PUBTKT_AUTH_VERSION "0.8"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */
@@ -69,7 +71,9 @@ typedef struct  {
 	int					debug;
 	int					fake_basic_auth;
 	int					grace_period;
+	int					passthru_basic_auth;
 	EVP_PKEY			*pubkey;	/* public key for signature verification */
+	char				*passthru_basic_key;
 } auth_pubtkt_dir_conf;
 
 /* Ticket structure */
@@ -78,6 +82,7 @@ typedef struct {
 	char			clientip[40];
 	unsigned int	valid_until;
 	unsigned int	grace_period;
+	char			bauth[256];
 	char			tokens[256];
 	char			user_data[256];
 } auth_pubtkt;
@@ -125,6 +130,7 @@ static unsigned int cache_hash(const char *ticket);
 
 static const char *set_auth_pubtkt_token(cmd_parms *cmd, void *cfg, const char *param);
 static const char *setup_pubkey(cmd_parms *cmd, void *cfg, const char *param);
+static const char *setup_passthru_basic_key(cmd_parms *cmd, void *cfg, const char *param);
 static const char *set_auth_pubtkt_debug(cmd_parms *cmd, void *cfg, const char *param);
 
 static int parse_ticket(request_rec *r, char *ticket, auth_pubtkt *tkt);
