@@ -73,7 +73,7 @@ typedef struct  {
 	int					grace_period;
 	int					passthru_basic_auth;
 	EVP_PKEY			*pubkey;	/* public key for signature verification */
-	char				*passthru_basic_key;
+	const char			*passthru_basic_key;
 } auth_pubtkt_dir_conf;
 
 /* Ticket structure */

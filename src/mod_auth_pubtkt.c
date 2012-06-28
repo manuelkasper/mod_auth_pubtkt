@@ -377,7 +377,7 @@ static int cookie_match(void *result, const char *key, const char *cookie) {
 	
 	if (cookie != NULL) {
 		char *cookie_name, *value;
-		int cknamelen = strlen(cr->cookie_name);
+		size_t cknamelen = strlen(cr->cookie_name);
 		
 		cookie_name = apr_palloc(cr->r->pool, cknamelen + 2);
 		strncpy(cookie_name, cr->cookie_name, cknamelen);
@@ -388,7 +388,7 @@ static int cookie_match(void *result, const char *key, const char *cookie) {
 		while ((value = strstr(value, cookie_name))) {
 			/* Cookie includes our cookie_name - copy (first) value into cookiebuf */
 			char *cookiebuf, *end;
-			int len;
+			size_t len;
 			
 			value += (cknamelen + 1);
 			cookiebuf = apr_pstrdup(cr->r->pool, value);
@@ -598,7 +598,7 @@ static int check_tokens(request_rec *r, auth_pubtkt *tkt) {
 		int i;
 		
 		for (i = 0; i < conf->auth_token->nelts; i++) {
-			int token_len = strlen(auth_tokens[i]);
+			size_t token_len = strlen(auth_tokens[i]);
 			if (strncmp(auth_tokens[i], next_parsed_token, token_len) == 0 &&
 				next_parsed_token[token_len] == 0) {
 				match = 1;
@@ -877,12 +877,14 @@ static int auth_pubtkt_check(request_rec *r) {
 
 	if (!apr_table_get(r->headers_in, "Authorization")) {
 		if (conf->passthru_basic_auth > 0 && parsed->bauth[0]) {
+			char *bauth;
+			
 			if (conf->debug >= 1)
 				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
 					"TKT: Adding passthru basic auth");
 			
 			/* need to decrypt bauth? */
-			char *bauth = parsed->bauth;
+			bauth = parsed->bauth;
 			if (conf->passthru_basic_key != NULL) {
 				EVP_CIPHER_CTX ctx;
 				char *decoded, *decrypted;
@@ -904,15 +906,15 @@ static int auth_pubtkt_check(request_rec *r) {
 					int tlen;
 					decrypted = (char*)apr_palloc(r->pool, len+1);
 					EVP_CIPHER_CTX_init(&ctx);
-					EVP_DecryptInit(&ctx, EVP_aes_128_cbc(), conf->passthru_basic_key, decoded);
+					EVP_DecryptInit(&ctx, EVP_aes_128_cbc(), (unsigned char*)conf->passthru_basic_key, (unsigned char*)decoded);
 					EVP_CIPHER_CTX_set_padding(&ctx, 0);
-					if (EVP_DecryptUpdate(&ctx, decrypted, &declen, &decoded[PASSTHRU_AUTH_IV_SIZE], len - PASSTHRU_AUTH_IV_SIZE) != 1) {
+					if (EVP_DecryptUpdate(&ctx, (unsigned char*)decrypted, &declen, (unsigned char*)&decoded[PASSTHRU_AUTH_IV_SIZE], len - PASSTHRU_AUTH_IV_SIZE) != 1) {
 						ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
 							"TKT: passthru decryption failed");
 						EVP_CIPHER_CTX_cleanup(&ctx);
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
-					if (EVP_DecryptFinal(&ctx, decrypted + declen, &tlen) != 1) {
+					if (EVP_DecryptFinal(&ctx, (unsigned char*)(decrypted + declen), &tlen) != 1) {
 						ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
 							"TKT: passthru decryption failed");
 						EVP_CIPHER_CTX_cleanup(&ctx);
