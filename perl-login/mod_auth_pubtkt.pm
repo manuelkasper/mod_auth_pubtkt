@@ -144,7 +144,7 @@ sub pubtkt_generate
 	croak "Invalid \"client_ip\" value ($client_ip), expecting a valid IP address."
 		unless $client_ip eq "" || $client_ip =~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
-	my $tokens = $args{token} || "";
+	my $tokens = $args{tokens} || "";
 	my $user_data = $args{userdata} || "";
 
 	# Generate Ticket String
