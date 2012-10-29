@@ -340,7 +340,7 @@ sig=MC0CFDkCxODPml+cEvAuO+o5w7jcvv/UAhUAg/Z2vSIjpRhIDhvu7UXQLuQwSCF=
 
 <p>Strip the signature off the ticket and Base64-decode it into a temporary file:</p>
 
-<pre># echo "MC0CFQC6c....=" | openssl enc -d -base64 &gt; sig.bin</pre>
+<pre># echo "MC0CFQC6c....=" | openssl enc -d -base64 -A &gt; sig.bin</pre>
 
 <p>Pipe the ticket value through openssl to verify the signature using the
 public key in pubkey.pem:</p>
