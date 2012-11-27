@@ -823,6 +823,14 @@ static int auth_pubtkt_check(request_rec *r) {
 		return redirect(r, conf->login_url);
 	}
 	
+	/* Ticket is valid, setup apache user */
+	/* Allows later ticket check failure logging to include user */
+#ifdef APACHE13
+	r->connection->user = parsed->uid;
+#else
+	r->user = parsed->uid;
+#endif
+
 	/* Check client IP address (if present in ticket) */
 	if (!check_clientip(r, parsed)) {
 		ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
@@ -863,12 +871,10 @@ static int auth_pubtkt_check(request_rec *r) {
 	if (!check_tokens(r, parsed))
 		return redirect(r, conf->unauth_url ? conf->unauth_url : conf->login_url);
 
-	/* Setup apache user, auth_type, and environment variables */
+	/* Setup apache auth_type, and environment variables */
 #ifdef APACHE13
-	r->connection->user = parsed->uid;
 	r->connection->ap_auth_type = MOD_AUTH_PUBTKT_AUTH_TYPE;
 #else
-	r->user = parsed->uid;
 	r->ap_auth_type = MOD_AUTH_PUBTKT_AUTH_TYPE;
 #endif
 	apr_table_set(r->subprocess_env, REMOTE_USER_ENV,        parsed->uid);
