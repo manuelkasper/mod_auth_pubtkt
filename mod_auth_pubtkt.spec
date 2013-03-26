@@ -42,7 +42,7 @@ rm -rf %{buildroot}
 %config %{_sysconfdir}/httpd/conf.d/auth_pubtkt.conf
 
 %changelog
-* Tue Mar 26 John Wittkoski <jwittkoski@gmail.com> 0.8-0
+* Tue Mar 26 2013 John Wittkoski <jwittkoski@gmail.com> 0.8-0
 - Updated to latest version of mod_auth_pubtkt [0.8]
 
 * Mon Jun 04 2012 Manuel Kasper <mk@neon1.net> 0.7-0
