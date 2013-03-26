@@ -128,6 +128,13 @@ AddModule mod_auth_pubtkt.c		# Apache 1.3 only
 	<li><strong><code>TKTAuthUnauthURL</code></strong>
 		<ul>
 			<li>URL that users whose ticket doesn't contain any of the required tokens (as set with <code>TKTAuthToken</code>) will be redirected to</li>
+			<li>If not set, <code>TKTAuthLoginURL</code> is used</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthBadIPURL</code> (since v0.7)</strong>
+		<ul>
+			<li>URL that users whose IP doesn't match the cip value in the ticket (if supplied) will be redirected to</li>
+			<li>If not set, <code>TKTAuthLoginURL</code> is used</li>
 		</ul>
 	</li>
 	<li><strong><code>TKTAuthRefreshURL</code> (since v0.3)</strong>
