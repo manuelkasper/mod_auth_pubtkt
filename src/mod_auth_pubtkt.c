@@ -624,7 +624,7 @@ static int check_clientip(request_rec *r, auth_pubtkt *tkt) {
 		return 1;		/* no clientip in ticket */
 	
 #if AP_MODULE_MAGIC_AT_LEAST(20111130,0)
-	return (strcmp(tkt->clientip, r->connection->client_ip) == 0);
+	return (strcmp(tkt->clientip, r->useragent_ip) == 0);
 #else
 	return (strcmp(tkt->clientip, r->connection->remote_ip) == 0);
 #endif
@@ -837,7 +837,7 @@ static int auth_pubtkt_check(request_rec *r) {
 			"TKT: client IP mismatch (ticket: %s, request: %s) - redirecting to badip URL",
 			parsed->clientip,
 #if AP_MODULE_MAGIC_AT_LEAST(20111130,0)
-			r->connection->client_ip
+			r->useragent_ip
 #else
 			r->connection->remote_ip
 #endif
