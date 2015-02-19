@@ -833,17 +833,22 @@ static int auth_pubtkt_check(request_rec *r) {
 
 	/* Check client IP address (if present in ticket) */
 	if (!check_clientip(r, parsed)) {
-		ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
-			"TKT: client IP mismatch (ticket: %s, request: %s) - redirecting to badip URL",
-			parsed->clientip,
 #if AP_MODULE_MAGIC_AT_LEAST(20111130,0)
-			r->useragent_ip
+		char *remote_ip = r->useragent_ip;
 #else
-			r->connection->remote_ip
+		char *remote_ip = r->connection->remote_ip;
 #endif
-		);
-		
-		return redirect(r, (conf->badip_url ? conf->badip_url : conf->login_url));
+
+		/* Add an IP param to URL */
+		char *badip_url = conf->badip_url ? conf->badip_url : conf->login_url;
+		char sep = ap_strchr(badip_url, '?') ? '&' : '?';
+		url = apr_psprintf(r->pool, "%s%cip=%s", badip_url, sep, remote_ip);
+
+		ap_log_rerror(APLOG_MARK, APLOG_NOTICE, APR_SUCCESS, r,
+			"TKT: client IP mismatch (ticket: %s, request: %s) - redirecting to badip URL",
+			parsed->clientip, remote_ip);
+
+		return redirect(r, url);
 	}
 
 	/* Valid ticket, check timeout - redirect/timed-out if so */
