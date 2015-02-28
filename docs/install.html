@@ -68,6 +68,8 @@ LoadModule auth_pubtkt_module libexec/apache/mod_auth_pubtkt.so
 AddModule mod_auth_pubtkt.c		# Apache 1.3 only
 </pre>
 
+<p><strong>Ensure that mod_authz_user is loaded/enabled as well.</strong></p>
+
 <p>Here's a simple VirtualHost configuration with mod_auth_pubtkt as a starting point; the configuration directives are explained below.</p>
 
 <p><strong>Note that the <tt>AuthType mod_auth_pubtkt</tt> statement is required!</strong></p>
