@@ -73,6 +73,46 @@ function pubtkt_generate($privkeyfile, $privkeytype, $uid, $clientip, $validunti
 	return $tkt . ";sig=" . base64_encode($sig);
 }
 
+/* Generate a ticket using php-only functions (only for RSA signature type)
+
+    Parameters:
+        privkey         private key as string (PEM format)
+        uid             user ID/username
+        clientip        client IP address (optional; can be empty or null)
+        validuntil      expiration timestamp (e.g. time() + 86400)
+        tokens          comma-separated list of tokens (optional)
+        udata           user data (optional)
+        bauth           basic auth username:password (for passthru, optional;
+                        can optionally use pubtkt_encrypt_bauth() to encrypt it)
+
+    Returns:
+        ticket string, or FALSE on failure
+*/
+function pubtkt_generate_php($privkey, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata, $bauth = null) {
+    /* format ticket string */
+    $tkt = "uid=$uid;";
+    if ($clientip)
+        $tkt .= "cip=$clientip;";
+    $tkt .= "validuntil=$validuntil;";
+    if ( isset($graceperiod) && is_numeric($graceperiod) && $graceperiod > 0 ) {
+        $tkt .= "graceperiod=".($validuntil-$graceperiod).";";
+    }
+    if (!empty($bauth))
+        $tkt .= "bauth=" . base64_encode($bauth) . ";";
+    $tkt .= "tokens=$tokens;udata=$udata";
+
+    $pkeyid = openssl_get_privatekey($privkey);
+    if($pkeyid === false)
+        return false;
+    $res = openssl_sign($tkt, $sig, $pkeyid);
+    openssl_free_key($pkeyid);
+
+    if(!$res)
+        return false;
+
+    return $tkt . ";sig=" . base64_encode($sig);
+}
+
 /*	Validate a ticket.
 	
 	Parameters:
@@ -123,6 +163,35 @@ function pubtkt_verify($pubkeyfile, $pubkeytype, $ticket) {
 	return ($res === "Verified OK");
 }
 
+/*  Validate a ticket using PHP only (only for RSA signature type)
+
+    Parameters:
+        pubkey          public key as string (PEM format)
+        ticket          ticket string (including signature)
+
+    Returns:
+        ticket valid true/false
+*/
+function pubtkt_verify_php($pubkey, $ticket) {
+    /* strip off signature */
+    $sigpos = strpos($ticket, ";sig=");
+    if ($sigpos === false)
+        return false;   /* no signature found */
+
+    $ticketdata = substr($ticket, 0, $sigpos);
+    $sigdata = base64_decode(substr($ticket, $sigpos + 5));
+
+    if (!$sigdata)
+        return false;
+
+    $ret = openssl_verify($ticketdata, $sigdata, $pubkey);
+
+    if($ret === 1)
+        return true;
+
+    return false;
+}
+
 /*	Parse a ticket into its key/value pairs and return them as an
 	associative array for easier use.
 */
@@ -156,6 +225,30 @@ function pubtkt_encrypt_bauth($bauth, $key) {
 	mcrypt_module_close($td);
 
 	return $iv . $encrypted;
+}
+
+/*  Decrypt a "bauth" passthru basic authentication value
+ *  and return only the password with the given key (must be exactly 16
+ *  characters). The input $bauth string should be binary,
+ *  so it has to be decoded using base64_decode beforehand.
+ *  Requires mcrypt!
+ */
+function pubtkt_decrypt_bauth($bauth, $key) {
+    if (strlen($key) != 16)
+        return null;
+
+    $td = mcrypt_module_open(MCRYPT_RIJNDAEL_128, '', MCRYPT_MODE_CBC, '');
+    $iv_s = mcrypt_enc_get_iv_size($td);
+    $iv = substr($bauth, 0, $iv_s);
+    $c_t = substr($bauth, $iv_s);
+
+    mcrypt_generic_init($td, $key, $iv);
+    $decrypted = mdecrypt_generic($td, $c_t);
+    mcrypt_generic_deinit($td);
+    mcrypt_module_close($td);
+
+    list($user, $pass) = explode(':', trim($decrypted));
+    return $pass;
 }
 
 ?>
