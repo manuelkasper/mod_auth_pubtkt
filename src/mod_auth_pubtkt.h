@@ -40,6 +40,7 @@
 #endif
 
 #define MOD_AUTH_PUBTKT_AUTH_TYPE "mod_auth_pubtkt"
+#define MOD_AUTH_PUBTKT_HEADER_NAME "Cookie"
 #define AUTH_COOKIE_NAME "auth_pubtkt"
 #define BACK_ARG_NAME "back"
 #define REMOTE_USER_ENV "REMOTE_USER"
@@ -52,7 +53,7 @@
 #define PASSTHRU_AUTH_KEY_SIZE 16	/* length of symmetric key for passthru basic auth encryption */
 #define PASSTHRU_AUTH_IV_SIZE 16
 
-#define PUBTKT_AUTH_VERSION "0.8"
+#define PUBTKT_AUTH_VERSION "0.9"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */
@@ -62,6 +63,7 @@ typedef struct  {
 	char				*timeout_url;
 	char				*post_timeout_url;
 	char				*unauth_url;
+	char				*auth_header_name;
 	char				*auth_cookie_name;
 	char				*back_arg_name;
 	char				*refresh_url;

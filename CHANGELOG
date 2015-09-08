@@ -1,3 +1,8 @@
+v0.9 (09/07/2015)
+-----------------
+- New option TKTAuthHeader allowing custom header(s) to be used instead
+  of a just a Cookie.
+
 v0.8 (06/28/2012)
 -----------------
 - new option TKTAuthPassthruBasicAuth and corresponding field in ticket
