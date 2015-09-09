@@ -64,6 +64,7 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->post_timeout_url = NULL;
 	conf->unauth_url = NULL;
 	conf->auth_token = apr_array_make(p, 0, sizeof (char *));
+	conf->auth_header_name = NULL;
 	conf->auth_cookie_name = NULL;
 	conf->back_arg_name = NULL;
 	conf->refresh_url = NULL;
@@ -90,6 +91,7 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->post_timeout_url = (subdir->post_timeout_url) ? subdir->post_timeout_url : parent->post_timeout_url;
 	conf->unauth_url = (subdir->unauth_url) ? subdir->unauth_url : parent->unauth_url;
 	conf->auth_token = (subdir->auth_token->nelts > 0) ? subdir->auth_token : parent->auth_token;
+	conf->auth_header_name = (subdir->auth_header_name) ? subdir->auth_header_name : parent->auth_header_name;
 	conf->auth_cookie_name = (subdir->auth_cookie_name) ? subdir->auth_cookie_name : parent->auth_cookie_name;
 	conf->back_arg_name = (subdir->back_arg_name) ? subdir->back_arg_name : parent->back_arg_name;
 	conf->refresh_url = (subdir->refresh_url) ? subdir->refresh_url : parent->refresh_url;
@@ -279,6 +281,9 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_TAKE1("TKTAuthUnauthURL", ap_set_string_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, unauth_url),
 		OR_AUTHCFG, "URL to redirect to if valid user without required token"),
+	AP_INIT_RAW_ARGS("TKTAuthHeader", ap_set_string_slot,
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, auth_header_name),
+		OR_AUTHCFG, "name of the header to use for the ticket"),
 	AP_INIT_TAKE1("TKTAuthCookieName", ap_set_string_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, auth_cookie_name),
 		OR_AUTHCFG, "name to use for ticket cookie"),
@@ -437,6 +442,105 @@ static int cookie_match(void *result, const char *key, const char *cookie) {
 			"TKT cookie_match: NOT found");
 	}
 	return 1;
+}
+
+/* Look for a ticket in a header - maybe a cookie, maybe not */
+static char *get_header_ticket(request_rec *r) {
+	auth_pubtkt_dir_conf *conf = ap_get_module_config(r->per_dir_config, &auth_pubtkt_module);
+
+	char *ticket_decoded, *found_ticket;
+	const char *header_name, *header_list_str, *header_value;
+	size_t ticket_len;
+
+	header_list_str = (conf->auth_header_name) ? conf->auth_header_name : MOD_AUTH_PUBTKT_HEADER_NAME;
+
+	if( !*header_list_str ) {
+		ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
+			"TKTAuthHeader directive is empty"
+		);
+		return NULL;
+	}
+
+	if (conf->debug >= 1) {
+		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+			"TKT get_header_ticket: looking for ticket in '%s' header(s)",
+			header_list_str
+		);
+	}
+
+	while( *header_list_str && (header_name = ap_getword_conf(r->pool, &header_list_str)) ) {
+
+		if(!header_name) {
+			break;
+		}
+
+		if (conf->debug >= 1) {
+			ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+				"TKT get_header_ticket: inspecting header '%s'",
+				header_name
+			);
+		}
+
+		if( strcasecmp(header_name,"Cookie") == 0 ) {
+			found_ticket = get_cookie_ticket(r);
+		}
+		else {
+			header_value = apr_table_get(r->headers_in,header_name);
+			if(!header_value) {
+				if (conf->debug >= 1) {
+					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+						"TKT get_header_ticket: auth header missing"
+					);
+				}
+				continue;
+			}
+			ticket_decoded = apr_pstrdup(r->pool,header_value);
+			ticket_len     = strlen(ticket_decoded);
+			if( ticket_len <= 0 ) {
+				if (conf->debug >= 1) {
+					ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+						"TKT get_header_ticket: auth header present but empty"
+					);
+				}
+				continue;
+			}
+
+			int i;
+			/* Replace '+' by ' ' (not handled by ap_unescape_url_keep2f) */
+			for (i = 0; ticket_decoded[i]; i++) {
+				if (ticket_decoded[i] == '+')
+					ticket_decoded[i] = ' ';
+			}
+
+			/* URL-unescape cookie */
+#ifdef APACHE24
+			if (ap_unescape_url_keep2f(ticket_decoded, 1) != 0) {
+#else
+			if (ap_unescape_url_keep2f(ticket_decoded) != 0) {
+#endif
+				ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, r,
+					"TKT get_header_ticket: error while URL-unescaping cookie");
+				continue;
+			}
+			if (conf->debug >= 1) {
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+					"TKT get_header_ticket: found '%s'", ticket_decoded);
+			}
+			found_ticket = apr_pstrdup(r->pool, ticket_decoded);
+		}
+
+	    if( found_ticket != NULL ) {
+			if (conf->debug >= 1) {
+				ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r,
+					"TKT get_header_ticket: found ticket in header '%s'", header_name);
+			}
+			return found_ticket;
+		}
+
+	}
+
+	return NULL;
+
 }
 
 /* Look for a cookie ticket */
@@ -756,6 +860,7 @@ void dump_config(request_rec *r) {
 		fprintf(stderr,"TKTAuthTimeoutURL: %s\n", 	        conf->timeout_url);
 		fprintf(stderr,"TKTAuthPostTimeoutURL: %s\n",	conf->post_timeout_url);
 		fprintf(stderr,"TKTAuthUnauthURL: %s\n", 	        conf->unauth_url);
+		fprintf(stderr,"TKTAuthHeader: %s\n", 		        conf->auth_header_name);
 		fprintf(stderr,"TKTAuthCookieName: %s\n", 	        conf->auth_cookie_name);
 		fprintf(stderr,"TKTAuthBackArgName: %s\n",	        conf->back_arg_name);
 		fprintf(stderr,"TKTAuthRefreshURL: %s\n",	        conf->refresh_url);
@@ -806,8 +911,8 @@ static int auth_pubtkt_check(request_rec *r) {
 		return redirect(r, conf->login_url);
 	}
 
-	/* Check for ticket cookie */
-	ticket = get_cookie_ticket(r);
+	/* Check for ticket in customer header or cookie */
+	ticket = get_header_ticket(r);
 	if (ticket == NULL) {
 		ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r, 
 			"TKT: no ticket found - redirecting to login URL");
