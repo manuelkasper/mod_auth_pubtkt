@@ -1,10 +1,10 @@
 Summary: Ticket-based authorization module for the Apache HTTP Server
 Name: mod_auth_pubtkt
-Version: 0.8
+Version: 0.9
 Release: 0
 License: Apache
 Group: Applications/System
-Source0: https://neon1.net/mod_auth_pubtkt/mod_auth_pubtkt-0.8.tar.gz
+Source0: https://neon1.net/mod_auth_pubtkt/mod_auth_pubtkt-0.9.tar.gz
 Source1: mod_auth_pubtkt.conf
 URL: https://neon1.net/mod_auth_pubtkt/
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
@@ -42,6 +42,9 @@ rm -rf %{buildroot}
 %config %{_sysconfdir}/httpd/conf.d/auth_pubtkt.conf
 
 %changelog
+* Wed Sep 09 2015 Manuel Kasper <mk@neon1.net> 0.9-0
+- Updated to latest version of mod_auth_pubtkt [0.9]
+
 * Tue Mar 26 2013 John Wittkoski <jwittkoski@gmail.com> 0.8-0
 - Updated to latest version of mod_auth_pubtkt [0.8]
 
