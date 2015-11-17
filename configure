@@ -6,6 +6,14 @@
 # Defaults
 APXS=/usr/sbin/apxs
 test -x $APXS || unset APXS
+if [ -z $APXS ]; then
+  APXS=/usr/bin/apxs
+  test -x $APXS || unset APXS
+fi
+if [ -z $APXS ]; then
+  APXS=/usr/bin/apxs2
+  test -x $APXS || unset APXS
+fi
 
 ME=`basename $0`
 DIR=`dirname $0`
