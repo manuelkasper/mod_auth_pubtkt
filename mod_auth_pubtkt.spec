@@ -19,8 +19,8 @@ Single sign-on module for Apache, based on mod_auth_tkt.
 %setup -q
 
 %build
-./configure --apxs=%{_sbindir}/apxs
-%{_sbindir}/apxs -c -Wc,"-Wall -ansi" -Wl,-lcrypto src/mod_auth_pubtkt.c
+./configure
+make
 
 %install
 rm -rf %{buildroot}
