@@ -22,7 +22,7 @@ if [ $DIR = '.' ]; then
 fi
 
 usage() {
-  echo "usage: $ME [--apxs=/path/to/apxs] [--apachever=<1.3|2|2.2>] [--debug]"
+  echo "usage: $ME [--apxs=/path/to/apxs] [--apachever=<1.3|2|2.2|2.4>] [--debug]"
 }
 die() {
   echo $*
@@ -72,7 +72,7 @@ test -x $APXS || die "Error: missing apxs '$APXS' (use --apxs=/path/to/apxs)"
 # Get Apache version
 if [ -z "$VERSION" ]; then
 	HTTPD=`$APXS -q SBINDIR`/`$APXS -q TARGET`
-	test -x $HTTPD || die "Error: cannot determine apache version (use --apachever=<1.3|2|2.2>)"
+	test -x $HTTPD || die "Error: cannot determine apache version (use --apachever=<1.3|2|2.2|2.4>)"
 	VERSION=`$HTTPD -v | head -1 | sed -e 's/.*Apache\///' -e 's/^\([0-9]\.[0-9]*\).*/\1/'`
 fi
 # Standardise
