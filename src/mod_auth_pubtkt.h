@@ -53,7 +53,7 @@
 #define PASSTHRU_AUTH_KEY_SIZE 16	/* length of symmetric key for passthru basic auth encryption */
 #define PASSTHRU_AUTH_IV_SIZE 16
 
-#define PUBTKT_AUTH_VERSION "0.9"
+#define PUBTKT_AUTH_VERSION "0.10"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */
@@ -75,6 +75,7 @@ typedef struct  {
 	int					grace_period;
 	int					passthru_basic_auth;
 	EVP_PKEY			*pubkey;	/* public key for signature verification */
+	const EVP_MD		*digest;	/* TKTAuthDigest */
 	const char			*passthru_basic_key;
 } auth_pubtkt_dir_conf;
 

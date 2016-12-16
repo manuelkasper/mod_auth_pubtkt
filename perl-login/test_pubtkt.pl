@@ -20,6 +20,7 @@ use mod_auth_pubtkt;
 my $ticket = pubtkt_generate(
 		privatekey => "key.priv.pem",
 		keytype    => "rsa",
+		digest     => undef,
 		clientip   => undef,
 		userid     => "102",
 		validuntil => time() + 86400,
@@ -34,6 +35,7 @@ print $ticket,"\n";
 my $ok = pubtkt_verify (
 		publickey => "key.pub.pem",
 		keytype   => "rsa",
+		digest    => undef,
 		ticket    => $ticket
 	);
 die "Ticket verification failed.\n" if not $ok;
@@ -46,6 +48,7 @@ $ticket =~ s/uid=102/uid=103/;
 $ok = pubtkt_verify (
 		publickey => "key.pub.pem",
 		keytype   => "rsa",
+		digest    => undef,
 		ticket    => $ticket
 	);
 

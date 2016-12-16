@@ -20,6 +20,7 @@ $logfile = "private/login.log";
 $privkeyfile = "private/tkt_privkey_dsa.pem";
 $pubkeyfile = "private/tkt_pubkey_dsa.pem";
 $keytype = "DSA";
+$digest = "default";
 $localuserdb = "private/users.txt";
 $default_timeout = 86400;
 $default_graceperiod = 3600;
@@ -119,7 +120,7 @@ if ($_POST) {
 		$tkt_validuntil = time() + $res['timeout'];
 		
 		/* generate the ticket now and set a domain cookie */
-		$tkt = pubtkt_generate($privkeyfile, $keytype, $username,
+		$tkt = pubtkt_generate($privkeyfile, $keytype, $digest, $username,
 			$_SERVER['REMOTE_ADDR'], $tkt_validuntil, $res['graceperiod'], join(",", $res['tokens']), "");
 		setcookie("auth_pubtkt", $tkt, 0, "/", $domain, $secure_cookie);
 		
@@ -145,7 +146,7 @@ if ($_POST) {
 
 		/* Checking validity of the ticket and if we are between begin of grace 
 		   period and end of ticket validity. If so we can refresh ticket */
-		if (pubtkt_verify($pubkeyfile, $keytype, $ticket) && isset($tkt_graceperiod)
+		if (pubtkt_verify($pubkeyfile, $keytype, $digest, $ticket) && isset($tkt_graceperiod)
 		    && is_numeric($tkt_graceperiod) && ($tkt_graceperiod <= time()) 
 		    && (time() <= $tkt_validuntil)) {
 
@@ -157,7 +158,7 @@ if ($_POST) {
 				$tkt_validuntil = time() + $user_info['data']['timeout'];
 		
 				/* generate the ticket now and set a domain cookie */
-				$tkt = pubtkt_generate($privkeyfile, $keytype, $tkt_uid,
+				$tkt = pubtkt_generate($privkeyfile, $keytype, $digest, $tkt_uid,
 					$ticket['cip'], $tkt_validuntil, $user_info['data']['graceperiod'], join(",", $user_info['data']['tokens']), "");
 				setcookie("auth_pubtkt", $tkt, 0, "/", $domain, $secure_cookie);
 		

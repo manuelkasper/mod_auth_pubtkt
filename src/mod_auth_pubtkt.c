@@ -74,6 +74,7 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->fake_basic_auth = -1;
 	conf->passthru_basic_auth = -1;
 	conf->pubkey = NULL;
+	conf->digest = NULL;
 	conf->passthru_basic_key = NULL;
 	return conf;
 }
@@ -101,6 +102,7 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->fake_basic_auth = (subdir->fake_basic_auth >= 0) ? subdir->fake_basic_auth : parent->fake_basic_auth;
 	conf->passthru_basic_auth = (subdir->passthru_basic_auth >= 0) ? subdir->passthru_basic_auth : parent->passthru_basic_auth;
 	conf->pubkey = (subdir->pubkey) ? subdir->pubkey : parent->pubkey;
+	conf->digest = (subdir->digest) ? subdir->digest : parent->digest;
 	conf->passthru_basic_key = (subdir->passthru_basic_key) ? subdir->passthru_basic_key : parent->passthru_basic_key;
 	
 	return conf;
@@ -239,6 +241,35 @@ static const char *setup_pubkey(cmd_parms *cmd, void *cfg, const char *param) {
 		  conf->pubkey->type == EVP_PKEY_DSA3 || conf->pubkey->type == EVP_PKEY_DSA4))
 		return apr_psprintf(cmd->pool, "unsupported key type %d", conf->pubkey->type);
 	
+	/* set default digest algorigthm - old defaults for now */
+	if (conf->pubkey->type == EVP_PKEY_RSA || conf->pubkey->type == EVP_PKEY_RSA2)
+		conf->digest = EVP_sha1();
+	else {
+		conf->digest = EVP_dss1();
+	}
+
+	return NULL;
+}
+
+static const char *setup_digest(cmd_parms *cmd, void *cfg, const char *param) {
+	auth_pubtkt_dir_conf *conf = (auth_pubtkt_dir_conf*)cfg;
+
+	if (strcasecmp(param, "SHA1")) {
+		conf->digest = EVP_sha1();
+	} else if (strcasecmp(param, "DSS1")) {
+		conf->digest = EVP_dss1();
+	} else if (strcasecmp(param, "SHA224")) {
+		conf->digest = EVP_sha224();
+	} else if (strcasecmp(param, "SHA256")) {
+		conf->digest = EVP_sha256();
+	} else if (strcasecmp(param, "SHA384")) {
+		conf->digest = EVP_sha384();
+	} else if (strcasecmp(param, "SHA512")) {
+		conf->digest = EVP_sha512();
+	} else {
+		return apr_pstrcat(cmd->pool, cmd->cmd->name, ": Invalid digest algorithm ", param, NULL);
+	}
+
 	return NULL;
 }
  
@@ -311,6 +342,9 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_TAKE1("TKTAuthPublicKey", setup_pubkey, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, pubkey),
 		OR_ALL, "public key file to use for verifying signatures"),
+	AP_INIT_TAKE1("TKTAuthDigest", setup_digest,
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, digest),
+		OR_ALL, "digest algorigthm to use for verifying signatures"),
 	AP_INIT_TAKE1("TKTAuthPassthruBasicKey", setup_passthru_basic_key, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, pubkey),
 		OR_ALL, "key to use for decrypting passthru field, must be exactly 16 characters"),
@@ -571,7 +605,6 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 	int sig_len;
 	auth_pubtkt *tkt;
 	EVP_MD_CTX ctx;
-	const EVP_MD *impl;
 	
 	if (strlen(ticket) > MAX_TICKET_SIZE) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r, 
@@ -626,21 +659,9 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 			tktval_buf, sigptr);
 	}
 	
-	if (conf->pubkey->type == EVP_PKEY_RSA || conf->pubkey->type == EVP_PKEY_RSA2)
-		impl = EVP_sha1();
-	else if (conf->pubkey->type == EVP_PKEY_DSA || conf->pubkey->type == EVP_PKEY_DSA1 ||
-			 conf->pubkey->type == EVP_PKEY_DSA2 || conf->pubkey->type == EVP_PKEY_DSA3 ||
-			 conf->pubkey->type == EVP_PKEY_DSA4)
-		impl = EVP_dss1();
-	else {
-		ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
-			"TKT validate_parse_ticket: invalid algorithm!");
-		return NULL;
-	}
-	
 	ERR_clear_error();
 	
-	if (!EVP_VerifyInit(&ctx, impl)) {
+	if (!EVP_VerifyInit(&ctx, conf->digest)) {
 		ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, r, 
 			"TKT validate_parse_ticket: EVP_VerifyInit failed");
 		return NULL;
