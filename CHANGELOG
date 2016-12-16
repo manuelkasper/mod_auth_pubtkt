@@ -1,3 +1,10 @@
+v0.10 (2016-12-16)
+------------------
+- New option TKTAuthDigest allowing selection of the digest algorithm.
+  If not configured, the old defaults of SHA1 (for RSA privkey) and DSS1
+  (for DSA privkey) will be used.  SHA224, SHA256, SHA384, and SHA512 are
+  the additional valid algorithm values.  (Contributed by Jake Buchholz)
+
 v0.9 (09/07/2015)
 -----------------
 - New option TKTAuthHeader allowing custom header(s) to be used instead

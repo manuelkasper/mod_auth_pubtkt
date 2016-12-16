@@ -26,6 +26,7 @@ our $VERSION = '0.1';
     my $ticket = pubtkt_generate(
     		privatekey => "key.priv.pem",
     		keytype    => "rsa",
+			digest     => undef,  # or sha1, dss1, sha224, sha256, sha384, or sha512
     		clientip   => undef,  # or a valid IP address
     		userid     => "102",  # or any ID that makes sense to your application, e.g. email
     		validuntil => time() + 86400, # valid for one day
@@ -43,6 +44,7 @@ our $VERSION = '0.1';
     my $ok = pubtkt_verify (
     		publickey => "key.pub.pem",
     		keytype   => "rsa",
+			digest    => undef,
     		ticket    => $ticket
     	);
     die "Ticket verification failed.\n" if not $ok;
@@ -155,7 +157,9 @@ sub pubtkt_generate
 	$tkt .= "tokens=$tokens;";
 	$tkt .= "udata=$user_data";
 
-	my $algorithm_param  = ( $keytype eq "dsa" ) ? "-dss1" : "-sha1";
+	my $algorithm_param = '-'.$args{digest} or ( $keytype eq "dsa" ) ? "-dss1" : "-sha1";
+	croak "Invalid \"digest\" value ($args{digest}), expecting sha1, dss1, sha224, sha256, sha384, or sha512."
+		if index(" sha1 dss1 sha224 sha256 sha384 sha512 ", " $args{digest} ") == -1;
 
 	my @cmd = ( $openssl_bin,
 		    "dgst", $algorithm_param,
@@ -188,7 +192,9 @@ sub pubtkt_verify
 	my $keytype = $args{keytype} or croak "Missing \"keytype\" parameter";
 	croak "Invalid \"keytype\" value ($keytype): expecting 'dsa' or 'rsa'\n"
 		unless $keytype eq "dsa" || $keytype eq "rsa";
-	my $algorithm_param  = ( $keytype eq "dsa" ) ? "-dss1" : "-sha1";
+	my $algorithm_param = '-'.$args{digest} or ( $keytype eq "dsa" ) ? "-dss1" : "-sha1";
+	croak "Invalid \"digest\" value ($args{digest}), expecting sha1, dss1, sha224, sha256, sha384, or sha512."
+		if index(" sha1 dss1 sha224 sha256 sha384 sha512 ", " $args{digest} ") == -1;
 
 	my $ticket_str = $args{ticket} or croak "Missing \"ticket\" parameter";
 

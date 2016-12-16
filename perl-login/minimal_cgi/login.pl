@@ -31,6 +31,7 @@ my $use_client_ip = 1 ; # should the ticket/cookie contain the client's IP addre
 ## TODO: DO NOT USE THESE keys in a production settings.
 ##       These are just for debugging/testing.
 my $key_type = "rsa";
+my $digest = undef; # defaults to sha1 or dss1, depending on $key_type
 my $public_key = "$FindBin::Bin/../key.pub.pem";
 my $private_key = "$FindBin::Bin/../key.priv.pem";
 
@@ -151,6 +152,7 @@ sub generate_pubtkt_cookie
 	my $ticket = pubtkt_generate(
 			privatekey => $private_key,
 			keytype    => $key_type,
+			digest     => $digest,
 			clientip   => ($use_client_ip) ? remote_addr() : undef,
 			userid     => $user_id,
 			validuntil => time() + $valid_until_delta,

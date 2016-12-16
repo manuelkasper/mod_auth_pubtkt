@@ -19,6 +19,8 @@ define("OPENSSL_PATH", "/usr/bin/openssl");
 	Parameters:
 		privkeyfile		path to private key file (PEM format)
 		privkeytype		type of private key ("RSA" or "DSA")
+		digest			digest algorithm ("default" is sha1 or dss1)
+						also valid:  sha224, sha256, sha384, and sha512
 		uid				user ID/username
 		clientip		client IP address (optional; can be empty or null)
 		validuntil		expiration timestamp (e.g. time() + 86400)
@@ -30,7 +32,7 @@ define("OPENSSL_PATH", "/usr/bin/openssl");
 	Returns:
 		ticket string, or FALSE on failure
 */
-function pubtkt_generate($privkeyfile, $privkeytype, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata, $bauth = null) {
+function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata, $bauth = null) {
 	
 	/* format ticket string */
 	$tkt = "uid=$uid;";
@@ -48,6 +50,9 @@ function pubtkt_generate($privkeyfile, $privkeytype, $uid, $clientip, $validunti
 		$algoparam = "-dss1";
 	else
 		$algoparam = "-sha1";
+
+	if ($digest != "default")
+		$algoparam = "-" . $digest;
 	
 	$fd = @proc_open(OPENSSL_PATH . " dgst $algoparam -binary -sign " . escapeshellarg($privkeyfile),
 		array(0 => array("pipe", "r"), 1 => array("pipe", "w")), $pipes);
@@ -118,12 +123,14 @@ function pubtkt_generate_php($privkey, $uid, $clientip, $validuntil, $graceperio
 	Parameters:
 		pubkeyfile		path to public key file (PEM format)
 		pubkeytype		type of public key ("RSA" or "DSA")
+		digest			digest algorithm ("default" is sha1 or dss1)
+						also valid:  sha224, sha256, sha384, and sha512
 		ticket			ticket string (including signature)
 	
 	Returns:
 		ticket valid true/false
 */
-function pubtkt_verify($pubkeyfile, $pubkeytype, $ticket) {
+function pubtkt_verify($pubkeyfile, $pubkeytype, $digest, $ticket) {
 	/* strip off signature */
 	$sigpos = strpos($ticket, ";sig=");
 	if ($sigpos === false)
@@ -145,6 +152,9 @@ function pubtkt_verify($pubkeyfile, $pubkeytype, $ticket) {
 		$algoparam = "-dss1";
 	else
 		$algoparam = "-sha1";
+
+	if ($digest != "default")
+		$algoparam = "-" . $digest;
 	
 	/* check DSA signature */
 	$fd = proc_open(OPENSSL_PATH . " dgst $algoparam -verify " . escapeshellarg($pubkeyfile) . 
