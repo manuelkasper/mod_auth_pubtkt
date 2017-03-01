@@ -254,17 +254,17 @@ static const char *setup_pubkey(cmd_parms *cmd, void *cfg, const char *param) {
 static const char *setup_digest(cmd_parms *cmd, void *cfg, const char *param) {
 	auth_pubtkt_dir_conf *conf = (auth_pubtkt_dir_conf*)cfg;
 
-	if (strcasecmp(param, "SHA1")) {
+	if (strcasecmp(param, "SHA1") == 0) {
 		conf->digest = EVP_sha1();
-	} else if (strcasecmp(param, "DSS1")) {
+	} else if (strcasecmp(param, "DSS1") == 0) {
 		conf->digest = EVP_dss1();
-	} else if (strcasecmp(param, "SHA224")) {
+	} else if (strcasecmp(param, "SHA224") == 0) {
 		conf->digest = EVP_sha224();
-	} else if (strcasecmp(param, "SHA256")) {
+	} else if (strcasecmp(param, "SHA256") == 0) {
 		conf->digest = EVP_sha256();
-	} else if (strcasecmp(param, "SHA384")) {
+	} else if (strcasecmp(param, "SHA384") == 0) {
 		conf->digest = EVP_sha384();
-	} else if (strcasecmp(param, "SHA512")) {
+	} else if (strcasecmp(param, "SHA512") == 0) {
 		conf->digest = EVP_sha512();
 	} else {
 		return apr_pstrcat(cmd->pool, cmd->cmd->name, ": Invalid digest algorithm ", param, NULL);
