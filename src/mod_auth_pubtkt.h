@@ -77,6 +77,7 @@ typedef struct  {
 	EVP_PKEY			*pubkey;	/* public key for signature verification */
 	const EVP_MD		*digest;	/* TKTAuthDigest */
 	const char			*passthru_basic_key;
+	int                 disable_checkip;
 } auth_pubtkt_dir_conf;
 
 /* Ticket structure */
