@@ -28,11 +28,12 @@ define("OPENSSL_PATH", "/usr/bin/openssl");
 		udata			user data (optional)
 		bauth			basic auth username:password (for passthru, optional;
 						can optionally use pubtkt_encrypt_bauth() to encrypt it)
+		multifactor             boolean (optional). Notes if multifactor authentication is present
 	
 	Returns:
 		ticket string, or FALSE on failure
 */
-function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata, $bauth = null) {
+function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata, $bauth = null, $multifactor = false) {
 	
 	/* format ticket string */
 	$tkt = "uid=$uid;";
@@ -43,8 +44,14 @@ function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $
 		$tkt .= "graceperiod=".($validuntil-$graceperiod).";";
 	}
 	if (!empty($bauth))
-		$tkt .= "bauth=" . base64_encode($bauth) . ";";
-	$tkt .= "tokens=$tokens;udata=$udata";
+		$tkt .= "bauth=" . base64_encode($bauth) . ";"
+
+        if ($multifactor) {
+                $multifactor_int = 1;
+        } else {
+                $multifactor_int = 0;
+        }
+        $tkt .= "tokens=$tokens;udata=$udata;multifactor=$multifactor_int";
 	
 	if ($privkeytype == "DSA")
 		$algoparam = "-dss1";

@@ -76,6 +76,8 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->pubkey = NULL;
 	conf->digest = NULL;
 	conf->passthru_basic_key = NULL;
+	conf->require_multifactor = -1;
+	conf->multifactor_url = NULL;
 	return conf;
 }
 
@@ -104,6 +106,8 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->pubkey = (subdir->pubkey) ? subdir->pubkey : parent->pubkey;
 	conf->digest = (subdir->digest) ? subdir->digest : parent->digest;
 	conf->passthru_basic_key = (subdir->passthru_basic_key) ? subdir->passthru_basic_key : parent->passthru_basic_key;
+	conf->require_multifactor = (subdir->require_multifactor >= 0) ? subdir->require_multifactor : parent->require_multifactor;
+	conf->multifactor_url = (subdir->multifactor_url) ? subdir->multifactor_url : parent->multifactor_url;
 	
 	return conf;
 }
@@ -351,6 +355,12 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_ITERATE("TKTAuthDebug", set_auth_pubtkt_debug, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, debug),
 		OR_AUTHCFG, "debug level (1-3, higher for more debug output)"),
+	AP_INIT_FLAG("TKTAuthRequireMultifactor", ap_set_flag_slot, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, require_multifactor),
+		OR_AUTHCFG, "whether to require an mulitfactor login flag in the ticket"),
+	AP_INIT_TAKE1("TKTAuthMultifactorURL", ap_set_string_slot, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, multifactor_url),
+		OR_AUTHCFG, "URL to redirect to if multifactor is required by not present in the ticket"),
 	{NULL},
 };
 
@@ -392,6 +402,8 @@ static int parse_ticket(request_rec *r, char *ticket, auth_pubtkt *tkt) {
 			strncpy(tkt->user_data, value, sizeof(tkt->user_data)-1);
 		else if (strcmp(key, "bauth") == 0)
 			strncpy(tkt->bauth, value, sizeof(tkt->bauth)-1);
+		else if (strcmp(key, "multifactor") == 0)
+                        tkt->multifactor = atoi(value);
 	}
 	
 	if (!tkt->uid[0] || tkt->valid_until == 0) {
@@ -402,8 +414,8 @@ static int parse_ticket(request_rec *r, char *ticket, auth_pubtkt *tkt) {
 
 	if (conf->debug >= 1) {
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r, 
-			"TKT parse_ticket decoded ticket: uid %s, cip %s, validuntil %u, graceperiod %u, tokens %s, udata %s, bauth %s",
-			tkt->uid, tkt->clientip, tkt->valid_until, tkt->grace_period, tkt->tokens, tkt->user_data, tkt->bauth);
+			"TKT parse_ticket decoded ticket: uid %s, cip %s, validuntil %u, graceperiod %u, tokens %s, udata %s, bauth %s, multifactor %u",
+			tkt->uid, tkt->clientip, tkt->valid_until, tkt->grace_period, tkt->tokens, tkt->user_data, tkt->bauth, tkt->multifactor);
 	}
   	
 	return 1;
@@ -771,6 +783,14 @@ static int check_grace_period(request_rec *r, auth_pubtkt *tkt) {
 	return ((tkt->grace_period == 0 ) || (now <= tkt->grace_period));
 }
 
+static int check_multifactor(request_rec *r, auth_pubtkt *tkt) {
+    auth_pubtkt_dir_conf *conf = ap_get_module_config(r->per_dir_config, &auth_pubtkt_module);
+    if (conf->require_multifactor == 1) {
+        return (tkt->multifactor == 1);
+    }
+    return 1;
+}
+
 /* Hex conversion, from httpd util.c */
 static const char c2x_table[] = "0123456789abcdef";
 static APR_INLINE unsigned char *c2x(unsigned what, unsigned char *where) {
@@ -897,6 +917,8 @@ void dump_config(request_rec *r) {
 		fprintf(stderr,"TKTAuthDebug: %d\n",                conf->debug);
 		fprintf(stderr,"TKTAuthFakeBasicAuth: %d\n", 	    conf->fake_basic_auth);
 		fprintf(stderr,"TKTAuthPassthruBasicAuth: %d\n", 	conf->passthru_basic_auth);
+		fprintf(stderr,"TKTAuthMultifactorURL: %s\n", 	conf->multifactor_url);
+		fprintf(stderr,"TKTAuthRequireMultifactor: %d\n", 	conf->require_multifactor);
 		fflush(stderr);
 	}
 }
@@ -997,6 +1019,13 @@ static int auth_pubtkt_check(request_rec *r) {
 			"TKT: ticket grace period - redirecting to refresh URL");
 		return redirect(r, (conf->refresh_url ? conf->refresh_url : conf->login_url));
 	}
+
+        /* Check Mulitfactor - redirect to MultifactorURL if missing */
+        if (!check_multifactor(r, parsed)) {
+		ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
+			"TKT: multifactor required - redirecting to multifactor URL");
+                return redirect(r, conf->multifactor_url ? conf->multifactor_url : conf->login_url);
+        }
 
 	/* Check tokens - redirect/unauthorised if so */
 	if (!check_tokens(r, parsed))

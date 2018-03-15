@@ -77,6 +77,8 @@ typedef struct  {
 	EVP_PKEY			*pubkey;	/* public key for signature verification */
 	const EVP_MD		*digest;	/* TKTAuthDigest */
 	const char			*passthru_basic_key;
+        int                             require_multifactor;
+        char                            *multifactor_url;
 } auth_pubtkt_dir_conf;
 
 /* Ticket structure */
@@ -88,6 +90,7 @@ typedef struct {
 	char			bauth[256];
 	char			tokens[256];
 	char			user_data[256];
+        int                     multifactor;
 } auth_pubtkt;
 
 typedef struct {
