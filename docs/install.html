@@ -220,7 +220,7 @@ AddModule mod_auth_pubtkt.c		# Apache 1.3 only
 	</li>
 	<li><strong><code>TKTAuthRequireMultifactor</code> (since v0.12)</strong>
 		<ul>
-                        <li>If on, this directive will require the tickets "multifactor" field to be set to true.</li>
+                        <li>If on, this directive will require the ticket's "multifactor" field to be set to 1.</li>
                         <li>Allows a specific directive to require additional authentication that may not be required globally.</li>
 			<li>Default: off</li>
 		</ul>
@@ -303,7 +303,7 @@ AddModule mod_auth_pubtkt.c		# Apache 1.3 only
 	</li>
 	<li>multifactor (optional; since v0.12)
 		<ul>
-                    <li>A int value(0/1) that denotes the current status of multifactor for a user</li>
+                    <li>An int value (0/1) that denotes the current status of multifactor for a user</li>
                     <li>Defaults to 0 if this key is not present</li>
 		</ul>
 	</li>

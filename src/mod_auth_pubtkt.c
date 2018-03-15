@@ -357,10 +357,10 @@ static const command_rec auth_pubtkt_cmds[] =
 		OR_AUTHCFG, "debug level (1-3, higher for more debug output)"),
 	AP_INIT_FLAG("TKTAuthRequireMultifactor", ap_set_flag_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, require_multifactor),
-		OR_AUTHCFG, "whether to require an mulitfactor login flag in the ticket"),
+		OR_AUTHCFG, "whether to require a mulitfactor login flag in the ticket"),
 	AP_INIT_TAKE1("TKTAuthMultifactorURL", ap_set_string_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, multifactor_url),
-		OR_AUTHCFG, "URL to redirect to if multifactor is required by not present in the ticket"),
+		OR_AUTHCFG, "URL to redirect to if multifactor is required but not present in the ticket"),
 	{NULL},
 };
 

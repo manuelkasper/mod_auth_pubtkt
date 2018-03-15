@@ -1,13 +1,14 @@
-v0.12 (2018-03-13)
+v0.12 (2018-03-15)
 ------------------
 - Add TKTAuthRequireMultifactor and TKTAuthMultifactorURL.
   These can be used to protect certain Directory/Location directives 
   with an additional login factor to achieve multifactor. Like the original
   login, the multifactor method is left up to the ticket generation 
-  application, only requiring a attestation that multifactor has been 
+  application, only requiring an attestation that multifactor has been 
   supplied. (Contributed by Nick Ramser)
 
 v0.11 (2017-02-28)
+------------------
 - Fixes selection of digest algorithm when using TKTAuthDigest.
 
 v0.10 (2016-12-16)
