@@ -44,7 +44,7 @@ function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $
 		$tkt .= "graceperiod=".($validuntil-$graceperiod).";";
 	}
 	if (!empty($bauth))
-		$tkt .= "bauth=" . base64_encode($bauth) . ";"
+		$tkt .= "bauth=" . base64_encode($bauth) . ";";
 
         if ($multifactor) {
                 $multifactor_int = 1;
