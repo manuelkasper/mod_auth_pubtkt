@@ -28,7 +28,7 @@ void auth_pubtkt_init(server_rec *s, pool *p) {
 }
 
 void auth_pubtkt_child_init(server_rec *s, pool *p) {
-	CRYPTO_malloc_init();
+	/* CRYPTO_malloc_init(); */
 	ERR_load_crypto_strings();
 	OpenSSL_add_all_algorithms();
 	
@@ -46,7 +46,7 @@ static int auth_pubtkt_init(apr_pool_t *p,
 }
 
 static void auth_pubtkt_child_init(apr_pool_t *p, server_rec *s) {
-	CRYPTO_malloc_init();
+	/* CRYPTO_malloc_init(); */
 	ERR_load_crypto_strings();
 	OpenSSL_add_all_algorithms();
 	
@@ -240,16 +240,16 @@ static const char *setup_pubkey(cmd_parms *cmd, void *cfg, const char *param) {
 			pubkeypath, ERR_reason_error_string(ERR_get_error()));
 	
 	/* check key type */
-	if (!(conf->pubkey->type == EVP_PKEY_RSA || conf->pubkey->type == EVP_PKEY_RSA2 ||
-		  conf->pubkey->type == EVP_PKEY_DSA || conf->pubkey->type == EVP_PKEY_DSA1 || conf->pubkey->type == EVP_PKEY_DSA2 ||
-		  conf->pubkey->type == EVP_PKEY_DSA3 || conf->pubkey->type == EVP_PKEY_DSA4))
-		return apr_psprintf(cmd->pool, "unsupported key type %d", conf->pubkey->type);
+	if (!(EVP_PKEY_id(conf->pubkey) == EVP_PKEY_RSA || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_RSA2 ||
+		  EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA1 || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA2 ||
+		  EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA3 || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA4))
+		return apr_psprintf(cmd->pool, "unsupported key type %d", EVP_PKEY_id(conf->pubkey) );
 	
 	/* set default digest algorigthm - old defaults for now */
-	if (conf->pubkey->type == EVP_PKEY_RSA || conf->pubkey->type == EVP_PKEY_RSA2)
+	if (EVP_PKEY_id(conf->pubkey) == EVP_PKEY_RSA || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_RSA2)
 		conf->digest = EVP_sha1();
 	else {
-		conf->digest = EVP_dss1();
+		conf->digest = EVP_sha1();
 	}
 
 	return NULL;
@@ -261,7 +261,7 @@ static const char *setup_digest(cmd_parms *cmd, void *cfg, const char *param) {
 	if (strcasecmp(param, "SHA1") == 0) {
 		conf->digest = EVP_sha1();
 	} else if (strcasecmp(param, "DSS1") == 0) {
-		conf->digest = EVP_dss1();
+		conf->digest = EVP_sha1();
 	} else if (strcasecmp(param, "SHA224") == 0) {
 		conf->digest = EVP_sha224();
 	} else if (strcasecmp(param, "SHA256") == 0) {
@@ -616,7 +616,7 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 	char *tktval_buf;
 	int sig_len;
 	auth_pubtkt *tkt;
-	EVP_MD_CTX ctx;
+	EVP_MD_CTX *ctx;
 	
 	if (strlen(ticket) > MAX_TICKET_SIZE) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r, 
@@ -672,20 +672,24 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 	}
 	
 	ERR_clear_error();
-	
-	if (!EVP_VerifyInit(&ctx, conf->digest)) {
+
+	ctx = EVP_MD_CTX_new();
+
+	if (!EVP_VerifyInit(ctx, conf->digest)) {
 		ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, r, 
 			"TKT validate_parse_ticket: EVP_VerifyInit failed");
+		EVP_MD_CTX_free(ctx);
 		return NULL;
 	}
 	
-	if (!EVP_VerifyUpdate(&ctx, tktval_buf, strlen(tktval_buf))) {
+	if (!EVP_VerifyUpdate(ctx, tktval_buf, strlen(tktval_buf))) {
 		ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, r, 
 			"TKT validate_parse_ticket: EVP_VerifyUpdate failed");
+		EVP_MD_CTX_free(ctx);
 		return NULL;
 	}
 	
-	if (EVP_VerifyFinal(&ctx, (unsigned char*)sig_buf, sig_len, conf->pubkey) != 1) {
+	if (EVP_VerifyFinal(ctx, (unsigned char*)sig_buf, sig_len, conf->pubkey) != 1) {
 		unsigned long lasterr;
 		char *errbuf = apr_palloc(r->pool, 120);
 	
@@ -698,8 +702,11 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 				"TKT validate_parse_ticket: OpenSSL error: %s", errbuf);
 		}
 		
+		EVP_MD_CTX_free(ctx);
 		return NULL;
 	}
+
+	EVP_MD_CTX_free(ctx);
 	
 	/* good signature - parse ticket */
 	if (!parse_ticket(r, tktval_buf, tkt))
@@ -1052,7 +1059,7 @@ static int auth_pubtkt_check(request_rec *r) {
 			/* need to decrypt bauth? */
 			bauth = parsed->bauth;
 			if (conf->passthru_basic_key != NULL) {
-				EVP_CIPHER_CTX ctx;
+				EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
 				char *decoded, *decrypted;
 				int len = 0, declen = 0;
 				
@@ -1071,22 +1078,22 @@ static int auth_pubtkt_check(request_rec *r) {
 					/* Decrypt */
 					int tlen;
 					decrypted = (char*)apr_palloc(r->pool, len+1);
-					EVP_CIPHER_CTX_init(&ctx);
-					EVP_DecryptInit(&ctx, EVP_aes_128_cbc(), (unsigned char*)conf->passthru_basic_key, (unsigned char*)decoded);
-					EVP_CIPHER_CTX_set_padding(&ctx, 0);
-					if (EVP_DecryptUpdate(&ctx, (unsigned char*)decrypted, &declen, (unsigned char*)&decoded[PASSTHRU_AUTH_IV_SIZE], len - PASSTHRU_AUTH_IV_SIZE) != 1) {
+					EVP_CIPHER_CTX_init(ctx);
+					EVP_DecryptInit(ctx, EVP_aes_128_cbc(), (unsigned char*)conf->passthru_basic_key, (unsigned char*)decoded);
+					EVP_CIPHER_CTX_set_padding(ctx, 0);
+					if (EVP_DecryptUpdate(ctx, (unsigned char*)decrypted, &declen, (unsigned char*)&decoded[PASSTHRU_AUTH_IV_SIZE], len - PASSTHRU_AUTH_IV_SIZE) != 1) {
 						ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
 							"TKT: passthru decryption failed");
-						EVP_CIPHER_CTX_cleanup(&ctx);
+						EVP_CIPHER_CTX_free(ctx);
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
-					if (EVP_DecryptFinal(&ctx, (unsigned char*)(decrypted + declen), &tlen) != 1) {
+					if (EVP_DecryptFinal(ctx, (unsigned char*)(decrypted + declen), &tlen) != 1) {
 						ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
 							"TKT: passthru decryption failed");
-						EVP_CIPHER_CTX_cleanup(&ctx);
+						EVP_CIPHER_CTX_free(ctx);
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
-					EVP_CIPHER_CTX_cleanup(&ctx);
+					EVP_CIPHER_CTX_free(ctx);
 					
 					decrypted[declen] = 0;
 					
