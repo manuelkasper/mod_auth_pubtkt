@@ -53,7 +53,7 @@
 #define PASSTHRU_AUTH_KEY_SIZE 16	/* length of symmetric key for passthru basic auth encryption */
 #define PASSTHRU_AUTH_IV_SIZE 16
 
-#define PUBTKT_AUTH_VERSION "0.10"
+#define PUBTKT_AUTH_VERSION "0.12"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */

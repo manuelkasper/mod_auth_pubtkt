@@ -4,13 +4,14 @@ Version: 0.12
 Release: 0
 License: Apache
 Group: Applications/System
-Source0: https://neon1.net/mod_auth_pubtkt/mod_auth_pubtkt-0.12.tar.gz
-Source1: mod_auth_pubtkt.conf
-URL: https://neon1.net/mod_auth_pubtkt/
+Source0: https://github.com/manuelkasper/mod_auth_pubtkt/archive/v%{version}.tar.gz#/%{name}-%{version}.tar.gz
+URL: https://neon1.net/mod_auth_pubtkt
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
 BuildRequires: httpd-devel, openssl-devel
 Requires: httpd-mmn = %(cat %{_includedir}/httpd/.mmn || echo httpd-devel missing)
 Requires: openssl
+
+%define conf_file mod_auth_pubtkt.conf
 
 %description
 Single sign-on module for Apache, based on mod_auth_tkt.
@@ -29,7 +30,9 @@ mkdir -p %{buildroot}/%{_libdir}/httpd/modules
 mkdir -p %{buildroot}/%{_sysconfdir}/httpd/conf.d
 
 install -m 755 src/.libs/mod_auth_pubtkt.so %{buildroot}/%{_libdir}/httpd/modules
-install -m 644 %{_sourcedir}/auth_pubtkt.conf %{buildroot}/%{_sysconfdir}/httpd/conf.d/
+install -m 644 %{conf_file} %{buildroot}/%{_sysconfdir}/httpd/conf.d
+
+stat %{buildroot}/%{_sysconfdir}/httpd/conf.d/%{conf_file}
 
 rm -f %{buildroot}/%{_libdir}/httpd/modules/{*.la,*.so.*}
 
@@ -39,7 +42,7 @@ rm -rf %{buildroot}
 %files
 %defattr(-,root,root,-)
 %{_libdir}/httpd/modules/*.so
-%config %{_sysconfdir}/httpd/conf.d/auth_pubtkt.conf
+%config %{_sysconfdir}/httpd/conf.d/%{conf_file}
 
 %changelog
 * Tue Mar 13 2018 Nick Ramser <nick.ramser@gmail.com> 0.12-0
