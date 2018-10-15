@@ -1,0 +1,397 @@
+# mod_auth_pubtkt
+A pragmatic Web Single Sign-On (SSO) solution
+
+<h2>Documentation</h2>
+
+<h3>Deployment considerations</h3>
+
+<p>Since the "valid until" field in a ticket is necessarily in absolute time (UNIX timestamp), the clocks of the ticket-generating login server and the ticket-verifying web servers need to be more or less in sync. The longer the ticket lifetime, the less important this becomes. It's generally good practice to keep your servers' time synchronized (using NTP, for example).</p>
+
+<h3>Downloading and installing the module (Unix)</h3>
+
+<p>Download the source code for the latest version of mod_auth_pubtkt <a href="https://github.com/manuelkasper/mod_auth_pubtkt/releases">here</a>.</p>
+
+<p>Decompress the downloaded archive and run the included &quot;configure&quot; script, specifying the path to apxs if necessary (use <code>where apxs</code> to find it). The Apache version should be detected automatically (but note that the configure/make scripts haven't been tested under anything but FreeBSD and Mac OS X):</p>
+
+<pre>
+# tar xzfv mod_auth_pubtkt-0.x.tar.gz
+# cd mod_auth_pubtkt-0.x
+# ./configure
+# make
+# make install
+</pre>
+
+<h3>Downloading and installing the module (Windows)</h3>
+
+<p>The source tarball, which you can download in the Unix section above, also contains pre-compiled modules for Apache 2.0 and 2.2 (in the &quot;bin&quot; subdirectory):</p>
+
+<p>Decompress the downloaded archive and copy the relevant module for the version of Apache you are using into the &quot;modules&quot; directory inside your Apache program directory, then follow the instructions below (which apply both to Unix and Windows machines). Make sure that you use an Apache version that is bundled with OpenSSL (even if you don't use HTTPS), as mod_auth_pubtkt needs it.</p>
+
+<p>Note: Windows binaries for OpenSSL (you'll need the command-line openssl.exe to generate a key pair) can be found at <a href="http://www.slproweb.com/products/Win32OpenSSL.html">http://www.slproweb.com/products/Win32OpenSSL.html</a>.</p>
+
+
+<h3>Generating a key pair</h3>
+
+<p>See the <a href="#dsa_or_rsa">section below</a> for a discussion on whether to use DSA or RSA.</p>
+
+<h4>DSA:</h4>
+<pre>
+# openssl dsaparam -out dsaparam.pem 2048
+# openssl gendsa -out privkey.pem dsaparam.pem
+# openssl dsa -in privkey.pem -out pubkey.pem -pubout
+</pre>
+
+<p>The dsaparam.pem file is not needed anymore after key generation and can safely be deleted.</p>
+
+<h4>RSA:</h4>
+<pre>
+# openssl genrsa -out privkey.pem 2048
+# openssl rsa -in privkey.pem -out pubkey.pem -pubout
+</pre>
+
+
+<h3>Module configuration</h3>
+
+<p>First of all, make sure that the module is loaded:</p>
+
+<pre>
+LoadModule auth_pubtkt_module libexec/apache/mod_auth_pubtkt.so
+AddModule mod_auth_pubtkt.c		# Apache 1.3 only
+</pre>
+
+<p><strong>Ensure that mod_authz_user is loaded/enabled as well.</strong></p>
+
+<p>Here's a simple VirtualHost configuration with mod_auth_pubtkt as a starting point; the configuration directives are explained below.</p>
+
+<p><strong>Note that the <tt>AuthType mod_auth_pubtkt</tt> statement is required!</strong></p>
+
+<pre>
+&lt;VirtualHost *:80&gt;
+    ServerName myserver.mydomain.com
+    DocumentRoot /path/to/my/htdocs
+    
+    TKTAuthPublicKey /etc/apache2/tkt_pubkey.pem
+    
+    &lt;Directory /path/to/my/htdocs&gt;
+        Order Allow,Deny
+        Allow from all
+        
+        AuthType mod_auth_pubtkt
+        TKTAuthLoginURL https://sso.mydomain.com/login
+        TKTAuthTimeoutURL https://sso.mydomain.com/login?timeout=1
+        TKTAuthUnauthURL https://sso.mydomain.com/login?unauth=1
+        TKTAuthToken &quot;myserver&quot;
+        require valid-user
+    &lt;/Directory&gt;
+&lt;/VirtualHost&gt;
+</pre>
+
+<h4>Directives for use in server config, virtual hosts and directory/location/.htaccess scope</h4>
+
+<ul>
+	<li><strong><code>TKTAuthPublicKey</code></strong>
+		<ul>
+			<li>Path to either a DSA or RSA public key file in PEM format</li>
+			<li>This public key will be used to verify ticket signatures</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthDigest</code></strong>
+		<ul>
+			<li>String indicating what digest algorithm to use when verifying ticket signatures</li>
+			<li>Valid values are SHA1, DSS1, SHA224, SHA256, SHA384, and SHA512</li>
+			<li>If not specified, the old defaults of SHA1 (for an RSA public key) or DSS1 (for a DSA public key) will be used.</li>
+		</ul>
+	</li>
+</ul>
+
+<h4>Directives for use in directory/location/.htaccess scope</h4>
+
+<ul>
+	<li><strong><code>TKTAuthLoginURL</code></strong>
+		<ul>
+			<li>URL that users without a valid ticket will be redirected to</li>
+			<li>The originally requested URL will be appended as a GET parameter (normally named &quot;back&quot;, but can be changed with <code>TKTAuthBackArgName</code>)</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthTimeoutURL</code></strong>
+		<ul>
+			<li>URL that users whose ticket has expired will be redirected to</li>
+			<li>If not set, <code>TKTAuthLoginURL</code> is used</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthPostTimeoutURL</code></strong>
+		<ul>
+			<li>Same as <code>TKTAuthTimeoutURL</code>, but in case the request was a POST</li>
+			<li>If not set, <code>TKTAuthTimeoutURL</code> is used (and if that is not set either, <code>TKTAuthLoginURL</code>)</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthUnauthURL</code></strong>
+		<ul>
+			<li>URL that users whose ticket doesn't contain any of the required tokens (as set with <code>TKTAuthToken</code>) will be redirected to</li>
+			<li>If not set, <code>TKTAuthLoginURL</code> is used</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthBadIPURL</code> (since v0.7)</strong>
+		<ul>
+			<li>URL that users whose IP doesn't match the cip value in the ticket (if supplied) will be redirected to</li>
+			<li>If not set, <code>TKTAuthLoginURL</code> is used</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthRefreshURL</code> (since v0.3)</strong>
+		<ul>
+			<li>URL that users whose ticket is within the grace period (as set with the <code>graceperiod</code> key in the ticket)
+				before the actual expiry will be redirected to. Only GET requests
+				are redirected; POST requests are accepted normally. The script at this
+				URL should check the ticket and issue a new one</li>
+			<li>If not set, <code>TKTAuthLoginURL</code> is used</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthHeader</code> (since v0.9)</strong>
+		<ul>
+            <li>A space separated list of headers to use for finding the ticket (case insensitive).
+                If this header specified is <code>Cookie</code> then the format of the
+                value expects to be a valid cookie (subject to the <code>TKTAuthCookieName</code> directive). 
+                Any other header assumes the value is a simple URL-encoded value of the ticket. 
+                The first header that has content is tried and any other tickets in other header(s) are ignored.
+                example, use Cookie first, fallback to X-My-Auth: <code>TKTAuthHeader Cookie X-My-Auth</code>
+                </li>
+			<li>Default: <code>Cookie</code></li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthCookieName</code></strong>
+		<ul>
+			<li>Name of the authentication cookie to use</li>
+			<li>Default: <code>auth_pubtkt</code></li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthBackArgName</code></strong>
+		<ul>
+			<li>Name of the GET argument with the originally requested URL (when redirecting to the login page)</li>
+			<li>Default: <code>back</code></li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthRequireSSL</code></strong>
+		<ul>
+			<li>only accept tickets in HTTPS requests</li>
+			<li>Default: off</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthToken</code></strong>
+		<ul>
+			<li>token that must be present in a ticket for access to be granted</li>
+			<li>Multiple tokens may be specified; only one of them needs to be present in the ticket (i.e. any token can match, not all tokens need to match)</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthFakeBasicAuth</code> (since v0.3)</strong>
+		<ul>
+			<li>if on, a fake Authorization header will be added to each request (username from ticket, fixed string "password" as the password). This can be used
+				in reverse proxy situations, and to prevent PHP from stripping username information from the
+				request (which would then not be available for logging purposes)</li>
+			<li>Default: off</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthPassthruBasicAuth</code> (since v0.8)</strong>
+		<ul>
+			<li>if on, the value from the ticket's "bauth" field will be added to the request as a Basic Authorization header. This can be used
+				in reverse proxy situations where one needs complete control over the username and password (see also TKTAuthFakeBasicAuth, which should
+				not be used at the same time).</li>
+			<li>Default: off</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthPassthruBasicKey</code> (since v0.8)</strong>
+		<ul>
+			<li>if set, the bauth value will be decrypted using the given key before it is added
+				to the Authorization header.</li>
+			<li>see <a href="#ticket_format">Ticket format</a> for details on the encryption</li>
+			<li>length must be exactly 16 characters</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthRequireMultifactor</code> (since v0.12)</strong>
+		<ul>
+                        <li>If on, this directive will require the ticket's "multifactor" field to be set to 1.</li>
+                        <li>Allows a specific directive to require additional authentication that may not be required globally.</li>
+			<li>Default: off</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthMultifactorURL</code> (since v0.12)</strong>
+		<ul>
+			<li>URL that users whose ticket doesn't contain the required multifactor value will be redirected to</li>
+			<li>If not set, <code>TKTAuthLoginURL</code> is used</li>
+		</ul>
+	</li>
+	<li><strong><code>TKTAuthDebug</code></strong>
+		<ul>
+			<li>debug level (1-3, higher for more debug output)</li>
+			<li>default: 0</li>
+			<li><em>Note: setting TKTAuthDebug to &gt; 0 will cause full ticket values to appear in your server's error log, which could be used to log in to other servers.</em></li>
+		</ul>
+	</li>
+</ul>
+
+
+<h3><a name="ticket_format"></a>Ticket format</h3>
+
+<p>Authentication tickets to be processed by mod_auth_pubtkt are composed of key/value pairs, with keys and values separated by '=' and individual key/value pairs separated by semicolons (';'). The following keys are defined; mod_auth_pubtkt silently ignores unknown keys:</p>
+
+<ul>
+	<li>uid (required; 32 chars max.)
+		<ul>
+			<li>the user ID (username) that the ticket has been issued for</li>
+			<li>passed to the environment in REMOTE_USER</li>
+		</ul>
+	</li>
+	<li>validuntil (required)
+		<ul>
+			<li>a UNIX timestamp (the number of seconds since 00:00:00 UTC on January 1, 1970) that describes when this ticket will expire</li>
+		</ul>
+	</li>
+	<li>cip (optional; 39 chars max.)
+		<ul>
+			<li>the IP address of the client that this ticket was issued for</li>
+			<li>if present, mod_auth_pubtkt will only accept the ticket for requests that came from this IP address</li>
+			<li>this is usually fine for use on Intranets and is in fact recommended, but may have to be omitted in the presence of NAT or load-balancing proxy servers</li>
+		</ul>
+	</li>
+	<li>tokens (optional; 255 chars max.)
+		<ul>
+			<li>a comma-separated list of words (group names etc.)</li>
+			<li>the presence of a given token can be made mandatory in the
+				per-directory configuration (using the TKTAuthToken directive),
+				effectively giving a simple form of authorization</li>
+			<li>the contents of this field are available to the environment
+				in REMOTE_USER_TOKENS</li>
+		</ul>
+	</li>
+	<li>udata (optional; 255 chars max.)
+		<ul>
+			<li>user data, for use by scripts; made available to the environment
+				in REMOTE_USER_DATA</li>
+			<li>not interpreted by mod_auth_pubtkt</li>
+		</ul>
+	</li>
+	<li>graceperiod (optional; since v0.4)
+		<ul>
+			<li>a UNIX timestamp (should be <strong>before</strong> the ticket's expiration date)
+				after which GET requests will be redirected to the refresh URL
+				(or the login URL, if no refresh URL is set)</li>
+		</ul>
+	</li>
+	<li>bauth (optional; since v0.8)
+		<ul>
+			<li>Base64 encoded value for Authorization header (when TKTAuthPassthruBasicAuth is enabled).</li>
+			<li>Can optionally be encrypted (TKTAuthPassthruBasicKey option)
+				<ul>
+					<li>encryption is AES-128-CBC, zero padded (not PKCS7), IV in first 16 bytes</li>
+					<li>the plaintext username:password string should be encrypted, and the
+						(binary) result after encryption Base64 encoded before being added to the ticket</li>
+					<li>for an encryption example using Mcrypt, see the included php-login/pubtkt.inc</li>
+				</ul>
+			</li>
+		</ul>
+	</li>
+	<li>multifactor (optional; since v0.12)
+		<ul>
+                    <li>An int value (0/1) that denotes the current status of multifactor for a user</li>
+                    <li>Defaults to 0 if this key is not present</li>
+		</ul>
+	</li>
+	<li>sig (required)
+		<ul>
+			<li>a Base64 encoded RSA or DSA signature over the digest of the content of the ticket up to (but not including) the semicolon before 'sig'</li>
+			<li>The default digest is SHA-1, unless TKTAuthDigest has specified a different algorithm.</li>
+			<li>RSA: raw result; DSA: DER encoded sequence of two integers &ndash; see Dss-Sig-Value in RFC 2459</li>
+			<li><strong>must be the last item in the ticket string</strong></li>
+		</ul>
+	</li>
+</ul>
+
+<p>Here's an example of how a real (DSA) ticket looks:</p>
+
+<pre>
+uid=mkasper;cip=192.168.200.163;validuntil=1201383542;tokens=foo,bar;udata=mydata;multifactor=1;
+sig=MC0CFDkCxODPml+cEvAuO+o5w7jcvv/UAhUAg/Z2vSIjpRhIDhvu7UXQLuQwSCF=
+</pre>
+
+<p>The ticket string is saved URL-encoded in a domain cookie, usually named <code>auth_pubtkt</code>, but this can be changed (using the <code>TKTAuthCookieName</code> directive).</p>
+
+<p>If you would like to use a custom header instead of a cookie (or want to use both), see the <code>TKTAuthHeader</code> directive.</p>
+
+
+<h3>Generating tickets</h3>
+
+<p>An example implementation of a login/ticket generating script in PHP is provided with the distribution (in the <code>php-login</code> subdirectory). It uses a simple flat-file user database by default, but can easily be extended to support LDAP (e.g. using <a href="http://adldap.sourceforge.net/">adLDAP</a>), RADIUS and other authentication methods.</p>
+
+<p>The ticket-generating (and verifying) functions are in <code>pubtkt.inc</code>. They use the OpenSSL command-line binary directly, for two reasons:</p>
+
+<ul>
+	<li>no dependency on PHP's OpenSSL extension</li>
+	<li>DSA signatures can be generated as well (normally, using the PHP OpenSSL extension, only RSA is supported)</li>
+</ul>
+
+<p>For Perl users, a module and example CGI script are provided in the <code>perl-login</code> subdirectory of the distribution.</p>
+
+<p>If you use Ruby, there's a <a href="http://github.com/matth/mod_auth_pubtkt_rb">gem created by Matt Haynes</a> that helps with generating tickets.</p>
+
+<p>For Python users, <a href="https://github.com/AndreyPlotnikov/auth_pubtkt">Andrey Plotnikov has created a module</a> for generating tickets.</p>
+
+<h3><a name="dsa_or_rsa"></a>Whether to choose RSA or DSA</h3>
+
+<p>For digital signatures, two public-key schemes are commonly used: <a href="http://en.wikipedia.org/wiki/RSA_(algorithm)">RSA</a> and <a href="http://en.wikipedia.org/wiki/Digital_Signature_Algorithm">DSA</a>. This module supports both, but you need to choose one over the other. Put simply, and assuming that both offer the same security at similar key sizes, it's mostly a decision between speed and signature (ticket/cookie) length.</p>
+
+<ul>
+	<li>RSA
+	<ul>
+		<li>signature length: as long as the modulus
+			<ul>
+				<li>1024-bit modulus: 128 bytes (~172 bytes after Base64 encoding)</li>
+			</ul></li>
+		<li>signing speed (1024-bit): about 235 signatures/s on a 2.8 GHz P4</li>
+		<li>verification speed (1024-bit): about 4400 verifications/s on a 2.8 GHz P4</li>
+	</ul>
+	</li>
+	<li>DSA
+	<ul>
+		<li>signature length: constant (independent of key size)
+			<ul>
+				<li>always 2 x 160-bit, plus 6 byte DER encoding overhead = 46 bytes (sometimes 47 because of an extra leading zero byte with OpenSSL) &ndash; ~64 bytes after Base64 encoding</li>
+			</ul></li>
+		<li>signing speed (1024-bit): about 477 signatures/s on a 2.8 GHz P4</li>
+		<li>verification speed (1024-bit): about 390 verifications/s on a 2.8 GHz P4</li>
+	</ul>
+	</li>
+</ul>
+
+<p>From a performance point of view, RSA is the clear winner, as each ticket only needs to be signed once, but usually verified many times on different servers. However, note that mod_auth_pubtkt caches tickets, so the verification only needs to be done once per server process and ticket (and not once per request).</p>
+
+<p>If ticket size matters to you more than speed, then DSA is the better choice; otherwise, you're probably better off using RSA. In the end, it's mostly down to &quot;religious&quot; issues or what you're already using in your company.</p>
+
+
+<h3>Generating a ticket signature on the command line</h3>
+
+<pre>
+# echo -n "uid=foobar;validuntil=123456789;tokens=;udata=" \
+  | openssl dgst -dss1 -sign privkey.pem \
+  | openssl enc -base64 -A
+</pre>
+
+<p>If TKTAuthDigest isn't being used, specify <code>-dss1</code> for DSA, and <code>-sha1</code> for RSA.  Otherwise specify the TKTAuthDigest directive's algorithm (i.e. <code>-sha256</code> for SHA256).</p>
+
+
+<h3>Verifying a ticket signature on the command line</h3>
+
+<p>Strip the signature off the ticket and Base64-decode it into a temporary file:</p>
+
+<pre># echo "MC0CFQC6c....=" | openssl enc -d -base64 -A &gt; sig.bin</pre>
+
+<p>Pipe the ticket value through openssl to verify the signature using the
+public key in pubkey.pem:</p>
+
+<pre># echo "uid=foobar;validuntil=123456789;tokens=;udata=" \
+  | openssl dgst -dss1 -verify pubkey.pem -signature sig.bin</pre>
+
+
+<h3><a name="domain_cookies"></a>Security considerations for domain cookies</h3>
+
+<p>Note that if rogue servers under your domain are a concern, the domain cookies used by mod_auth_pubtkt may pose a problem, since a rogue server can steal a legitimate user's ticket. This can be mitigated by marking the ticket cookie as &quot;secure&quot;, so that it is only transported via HTTPS, which means that only servers with a valid SSL certificate for your domain can see the user's ticket (unless the user overrides security warnings in the browser). Also, including the client IP address in the ticket (as is recommended whenever possible) makes it harder to use a stolen ticket.</p>
+
+<p>Another way to solve this would be to change the login server to check the &quot;back&quot; URL and, instead of issuing cookies directly, include the ticket in the redirect back to the web server with the desired resource, which can then install the ticket as a cookie under its own server name. This would require adding support for parsing tickets in GET parameters to mod_auth_pubtkt (could be backported from mod_auth_tkt). Also, the login server would need to keep a copy of the ticket stored in a cookie under its own server name so that the user only has to log in once, of course. Finally, since there would now be a cookie for each server, it would be much more difficult to properly log out (without closing the browser).</p>
