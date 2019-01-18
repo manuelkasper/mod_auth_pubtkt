@@ -264,7 +264,8 @@ function pubtkt_decrypt_bauth($bauth, $key) {
     mcrypt_generic_deinit($td);
     mcrypt_module_close($td);
 
-    list($user, $pass) = explode(':', trim($decrypted));
+    $decrypted = trim($decrypted);
+    $pass = substr($decrypted, strpos($decrypted, ':') + 1);
     return $pass;
 }
 
