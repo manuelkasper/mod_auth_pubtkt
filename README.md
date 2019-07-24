@@ -1,16 +1,7 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
-        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
-<head>
-	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-	<title>mod_auth_pubtkt: a pragmatic Web Single Sign-On (SSO) solution - Documentation</title>
-<style type="text/css">
-	@import "style.css";
-</style>
-</head>
-<body>
+# mod_auth_pubtkt
+A pragmatic Web Single Sign-On (SSO) solution
 
-<h2>mod_auth_pubtkt: Documentation</h2>
+<h2>Documentation</h2>
 
 <h3>Deployment considerations</h3>
 
@@ -18,7 +9,7 @@
 
 <h3>Downloading and installing the module (Unix)</h3>
 
-<p>Download the source code for the latest version of mod_auth_pubtkt <a href="https://neon1.net/mod_auth_pubtkt/download.html">here</a>.</p>
+<p>Download the source code for the latest version of mod_auth_pubtkt <a href="https://github.com/manuelkasper/mod_auth_pubtkt/releases">here</a>.</p>
 
 <p>Decompress the downloaded archive and run the included &quot;configure&quot; script, specifying the path to apxs if necessary (use <code>where apxs</code> to find it). The Apache version should be detected automatically (but note that the configure/make scripts haven't been tested under anything but FreeBSD and Mac OS X):</p>
 
@@ -45,7 +36,7 @@
 
 <h4>DSA:</h4>
 <pre>
-# openssl dsaparam -out dsaparam.pem 1024
+# openssl dsaparam -out dsaparam.pem 2048
 # openssl gendsa -out privkey.pem dsaparam.pem
 # openssl dsa -in privkey.pem -out pubkey.pem -pubout
 </pre>
@@ -54,7 +45,7 @@
 
 <h4>RSA:</h4>
 <pre>
-# openssl genrsa -out privkey.pem 1024
+# openssl genrsa -out privkey.pem 2048
 # openssl rsa -in privkey.pem -out pubkey.pem -pubout
 </pre>
 
@@ -159,12 +150,9 @@ AddModule mod_auth_pubtkt.c		# Apache 1.3 only
 		<ul>
             <li>A space separated list of headers to use for finding the ticket (case insensitive).
                 If this header specified is <code>Cookie</code> then the format of the
-                value expects to be a valid cookie (subject to the <code>TKTAuthCookieName</code> directive).
-
-                Any other header assumes the value is a simple URL-encoded value of the ticket.
-
+                value expects to be a valid cookie (subject to the <code>TKTAuthCookieName</code> directive). 
+                Any other header assumes the value is a simple URL-encoded value of the ticket. 
                 The first header that has content is tried and any other tickets in other header(s) are ignored.
-
                 example, use Cookie first, fallback to X-My-Auth: <code>TKTAuthHeader Cookie X-My-Auth</code>
                 </li>
 			<li>Default: <code>Cookie</code></li>
@@ -407,6 +395,3 @@ public key in pubkey.pem:</p>
 <p>Note that if rogue servers under your domain are a concern, the domain cookies used by mod_auth_pubtkt may pose a problem, since a rogue server can steal a legitimate user's ticket. This can be mitigated by marking the ticket cookie as &quot;secure&quot;, so that it is only transported via HTTPS, which means that only servers with a valid SSL certificate for your domain can see the user's ticket (unless the user overrides security warnings in the browser). Also, including the client IP address in the ticket (as is recommended whenever possible) makes it harder to use a stolen ticket.</p>
 
 <p>Another way to solve this would be to change the login server to check the &quot;back&quot; URL and, instead of issuing cookies directly, include the ticket in the redirect back to the web server with the desired resource, which can then install the ticket as a cookie under its own server name. This would require adding support for parsing tickets in GET parameters to mod_auth_pubtkt (could be backported from mod_auth_tkt). Also, the login server would need to keep a copy of the ticket stored in a cookie under its own server name so that the user only has to log in once, of course. Finally, since there would now be a cookie for each server, it would be much more difficult to properly log out (without closing the browser).</p>
-
-</body>
-</html>

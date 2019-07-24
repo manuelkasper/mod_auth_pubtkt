@@ -72,7 +72,9 @@ function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $
 	fwrite($pipes[0], $tkt);
 	fclose($pipes[0]);
 	
-	$sig = fread($pipes[1], 8192);
+	$sig = '';
+	while (!feof($pipes[1]))
+		$sig .= fread($pipes[1], 8192);
 	fclose($pipes[1]);
 	
 	$res = proc_close($fd);
@@ -264,7 +266,8 @@ function pubtkt_decrypt_bauth($bauth, $key) {
     mcrypt_generic_deinit($td);
     mcrypt_module_close($td);
 
-    list($user, $pass) = explode(':', trim($decrypted));
+    $decrypted = trim($decrypted);
+    $pass = substr($decrypted, strpos($decrypted, ':') + 1);
     return $pass;
 }
 

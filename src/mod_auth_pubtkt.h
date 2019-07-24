@@ -14,6 +14,10 @@
 #include <openssl/x509.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L) || defined (LIBRESSL_VERSION_NUMBER)
+#define EVP_MD_CTX_new EVP_MD_CTX_create
+#define EVP_MD_CTX_free EVP_MD_CTX_destroy
+#endif
 
 #include "httpd.h"
 #include "http_config.h"
@@ -53,7 +57,7 @@
 #define PASSTHRU_AUTH_KEY_SIZE 16	/* length of symmetric key for passthru basic auth encryption */
 #define PASSTHRU_AUTH_IV_SIZE 16
 
-#define PUBTKT_AUTH_VERSION "0.12"
+#define PUBTKT_AUTH_VERSION "0.13"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */
