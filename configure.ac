@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([mod_auth_pubtkt],[0.12],[https://github.com/manuelkasper/mod_auth_pubtkt]) 
+AC_INIT([mod_auth_pubtkt],[0.13],[https://github.com/manuelkasper/mod_auth_pubtkt]) 
 AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
