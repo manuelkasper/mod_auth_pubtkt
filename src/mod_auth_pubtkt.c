@@ -673,19 +673,40 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 	
 	ERR_clear_error();
 
+#ifdef HAVE_EVP_MD_CTX_NEW
 	ctx = EVP_MD_CTX_new();
+#elif HAVE_EVP_MD_CTX_CREATE
+    ctx = EVP_MD_CTX_create();
+#else
+    ctx = malloc(sizeof(*ctx));
+    EVP_MD_CTX_init(ctx);
+#endif
 
 	if (!EVP_VerifyInit(ctx, conf->digest)) {
 		ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, r, 
 			"TKT validate_parse_ticket: EVP_VerifyInit failed");
+#ifdef HAVE_EVP_MD_CTX_FREE
 		EVP_MD_CTX_free(ctx);
+#elif HAVE_EVP_MD_CTX_DESTROY
+        EVP_MD_CTX_destroy(ctx);
+#else
+        EVP_MD_CTX_cleanup(ctx);
+        free(ctx);
+#endif
 		return NULL;
 	}
 	
 	if (!EVP_VerifyUpdate(ctx, tktval_buf, strlen(tktval_buf))) {
 		ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, r, 
 			"TKT validate_parse_ticket: EVP_VerifyUpdate failed");
+#ifdef HAVE_EVP_MD_CTX_FREE
 		EVP_MD_CTX_free(ctx);
+#elif HAVE_EVP_MD_CTX_DESTROY
+        EVP_MD_CTX_destroy(ctx);
+#else
+        EVP_MD_CTX_cleanup(ctx);
+        free(ctx);
+#endif
 		return NULL;
 	}
 	
@@ -702,11 +723,25 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 				"TKT validate_parse_ticket: OpenSSL error: %s", errbuf);
 		}
 		
+#ifdef HAVE_EVP_MD_CTX_FREE
 		EVP_MD_CTX_free(ctx);
+#elif HAVE_EVP_MD_CTX_DESTROY
+        EVP_MD_CTX_destroy(ctx);
+#else
+        EVP_MD_CTX_cleanup(ctx);
+        free(ctx);
+#endif
 		return NULL;
 	}
 
+#ifdef HAVE_EVP_MD_CTX_FREE
 	EVP_MD_CTX_free(ctx);
+#elif HAVE_EVP_MD_CTX_DESTROY
+    EVP_MD_CTX_destroy(ctx);
+#else
+    EVP_MD_CTX_cleanup(ctx);
+    free(ctx);
+#endif
 	
 	/* good signature - parse ticket */
 	if (!parse_ticket(r, tktval_buf, tkt))
