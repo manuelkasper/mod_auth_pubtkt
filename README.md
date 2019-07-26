@@ -234,7 +234,7 @@ AddModule mod_auth_pubtkt.c		# Apache 1.3 only
 <p>Authentication tickets to be processed by mod_auth_pubtkt are composed of key/value pairs, with keys and values separated by '=' and individual key/value pairs separated by semicolons (';'). The following keys are defined; mod_auth_pubtkt silently ignores unknown keys:</p>
 
 <ul>
-	<li>uid (required; 32 chars max.)
+	<li>uid (required; 255 chars max.)
 		<ul>
 			<li>the user ID (username) that the ticket has been issued for</li>
 			<li>passed to the environment in REMOTE_USER</li>
