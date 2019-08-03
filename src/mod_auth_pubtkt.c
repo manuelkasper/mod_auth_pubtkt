@@ -28,7 +28,7 @@ void auth_pubtkt_init(server_rec *s, pool *p) {
 }
 
 void auth_pubtkt_child_init(server_rec *s, pool *p) {
-	CRYPTO_malloc_init();
+	/* CRYPTO_malloc_init(); */
 	ERR_load_crypto_strings();
 	OpenSSL_add_all_algorithms();
 	
@@ -46,7 +46,7 @@ static int auth_pubtkt_init(apr_pool_t *p,
 }
 
 static void auth_pubtkt_child_init(apr_pool_t *p, server_rec *s) {
-	CRYPTO_malloc_init();
+	/* CRYPTO_malloc_init(); */
 	ERR_load_crypto_strings();
 	OpenSSL_add_all_algorithms();
 	
@@ -77,6 +77,8 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->digest = NULL;
 	conf->passthru_basic_key = NULL;
 	conf->disable_checkip = 0;
+	conf->require_multifactor = -1;
+	conf->multifactor_url = NULL;
 	return conf;
 }
 
@@ -106,6 +108,8 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->digest = (subdir->digest) ? subdir->digest : parent->digest;
 	conf->passthru_basic_key = (subdir->passthru_basic_key) ? subdir->passthru_basic_key : parent->passthru_basic_key;
 	conf->disable_checkip = (subdir->disable_checkip >= 0) ? subdir->disable_checkip : parent->disable_checkip;
+	conf->require_multifactor = (subdir->require_multifactor >= 0) ? subdir->require_multifactor : parent->require_multifactor;
+	conf->multifactor_url = (subdir->multifactor_url) ? subdir->multifactor_url : parent->multifactor_url;
 	
 	return conf;
 }
@@ -238,16 +242,16 @@ static const char *setup_pubkey(cmd_parms *cmd, void *cfg, const char *param) {
 			pubkeypath, ERR_reason_error_string(ERR_get_error()));
 	
 	/* check key type */
-	if (!(conf->pubkey->type == EVP_PKEY_RSA || conf->pubkey->type == EVP_PKEY_RSA2 ||
-		  conf->pubkey->type == EVP_PKEY_DSA || conf->pubkey->type == EVP_PKEY_DSA1 || conf->pubkey->type == EVP_PKEY_DSA2 ||
-		  conf->pubkey->type == EVP_PKEY_DSA3 || conf->pubkey->type == EVP_PKEY_DSA4))
-		return apr_psprintf(cmd->pool, "unsupported key type %d", conf->pubkey->type);
+	if (!(EVP_PKEY_id(conf->pubkey) == EVP_PKEY_RSA || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_RSA2 ||
+		  EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA1 || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA2 ||
+		  EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA3 || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_DSA4))
+		return apr_psprintf(cmd->pool, "unsupported key type %d", EVP_PKEY_id(conf->pubkey) );
 	
 	/* set default digest algorigthm - old defaults for now */
-	if (conf->pubkey->type == EVP_PKEY_RSA || conf->pubkey->type == EVP_PKEY_RSA2)
+	if (EVP_PKEY_id(conf->pubkey) == EVP_PKEY_RSA || EVP_PKEY_id(conf->pubkey) == EVP_PKEY_RSA2)
 		conf->digest = EVP_sha1();
 	else {
-		conf->digest = EVP_dss1();
+		conf->digest = EVP_sha1();
 	}
 
 	return NULL;
@@ -259,7 +263,7 @@ static const char *setup_digest(cmd_parms *cmd, void *cfg, const char *param) {
 	if (strcasecmp(param, "SHA1") == 0) {
 		conf->digest = EVP_sha1();
 	} else if (strcasecmp(param, "DSS1") == 0) {
-		conf->digest = EVP_dss1();
+		conf->digest = EVP_sha1();
 	} else if (strcasecmp(param, "SHA224") == 0) {
 		conf->digest = EVP_sha224();
 	} else if (strcasecmp(param, "SHA256") == 0) {
@@ -356,6 +360,12 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_FLAG("TKTAuthDisableCheckIP", ap_set_flag_slot,
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, disable_checkip),
 		OR_AUTHCFG, "Disable checking that the remote IP matches the IP in the token."),
+	AP_INIT_FLAG("TKTAuthRequireMultifactor", ap_set_flag_slot, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, require_multifactor),
+		OR_AUTHCFG, "whether to require a mulitfactor login flag in the ticket"),
+	AP_INIT_TAKE1("TKTAuthMultifactorURL", ap_set_string_slot, 
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, multifactor_url),
+		OR_AUTHCFG, "URL to redirect to if multifactor is required but not present in the ticket"),
 	{NULL},
 };
 
@@ -397,6 +407,8 @@ static int parse_ticket(request_rec *r, char *ticket, auth_pubtkt *tkt) {
 			strncpy(tkt->user_data, value, sizeof(tkt->user_data)-1);
 		else if (strcmp(key, "bauth") == 0)
 			strncpy(tkt->bauth, value, sizeof(tkt->bauth)-1);
+		else if (strcmp(key, "multifactor") == 0)
+                        tkt->multifactor = atoi(value);
 	}
 	
 	if (!tkt->uid[0] || tkt->valid_until == 0) {
@@ -407,8 +419,8 @@ static int parse_ticket(request_rec *r, char *ticket, auth_pubtkt *tkt) {
 
 	if (conf->debug >= 1) {
 		ap_log_rerror(APLOG_MARK, APLOG_DEBUG, APR_SUCCESS, r, 
-			"TKT parse_ticket decoded ticket: uid %s, cip %s, validuntil %u, graceperiod %u, tokens %s, udata %s, bauth %s",
-			tkt->uid, tkt->clientip, tkt->valid_until, tkt->grace_period, tkt->tokens, tkt->user_data, tkt->bauth);
+			"TKT parse_ticket decoded ticket: uid %s, cip %s, validuntil %u, graceperiod %u, tokens %s, udata %s, bauth %s, multifactor %u",
+			tkt->uid, tkt->clientip, tkt->valid_until, tkt->grace_period, tkt->tokens, tkt->user_data, tkt->bauth, tkt->multifactor);
 	}
   	
 	return 1;
@@ -609,7 +621,7 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 	char *tktval_buf;
 	int sig_len;
 	auth_pubtkt *tkt;
-	EVP_MD_CTX ctx;
+	EVP_MD_CTX *ctx;
 	
 	if (strlen(ticket) > MAX_TICKET_SIZE) {
 		ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r, 
@@ -665,20 +677,45 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 	}
 	
 	ERR_clear_error();
-	
-	if (!EVP_VerifyInit(&ctx, conf->digest)) {
+
+#ifdef HAVE_EVP_MD_CTX_NEW
+	ctx = EVP_MD_CTX_new();
+#elif HAVE_EVP_MD_CTX_CREATE
+    ctx = EVP_MD_CTX_create();
+#else
+    ctx = malloc(sizeof(*ctx));
+    EVP_MD_CTX_init(ctx);
+#endif
+
+	if (!EVP_VerifyInit(ctx, conf->digest)) {
 		ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, r, 
 			"TKT validate_parse_ticket: EVP_VerifyInit failed");
+#ifdef HAVE_EVP_MD_CTX_FREE
+		EVP_MD_CTX_free(ctx);
+#elif HAVE_EVP_MD_CTX_DESTROY
+        EVP_MD_CTX_destroy(ctx);
+#else
+        EVP_MD_CTX_cleanup(ctx);
+        free(ctx);
+#endif
 		return NULL;
 	}
 	
-	if (!EVP_VerifyUpdate(&ctx, tktval_buf, strlen(tktval_buf))) {
+	if (!EVP_VerifyUpdate(ctx, tktval_buf, strlen(tktval_buf))) {
 		ap_log_rerror(APLOG_MARK, APLOG_WARNING, APR_SUCCESS, r, 
 			"TKT validate_parse_ticket: EVP_VerifyUpdate failed");
+#ifdef HAVE_EVP_MD_CTX_FREE
+		EVP_MD_CTX_free(ctx);
+#elif HAVE_EVP_MD_CTX_DESTROY
+        EVP_MD_CTX_destroy(ctx);
+#else
+        EVP_MD_CTX_cleanup(ctx);
+        free(ctx);
+#endif
 		return NULL;
 	}
 	
-	if (EVP_VerifyFinal(&ctx, (unsigned char*)sig_buf, sig_len, conf->pubkey) != 1) {
+	if (EVP_VerifyFinal(ctx, (unsigned char*)sig_buf, sig_len, conf->pubkey) != 1) {
 		unsigned long lasterr;
 		char *errbuf = apr_palloc(r->pool, 120);
 	
@@ -691,8 +728,25 @@ static auth_pubtkt* validate_parse_ticket(request_rec *r, char *ticket) {
 				"TKT validate_parse_ticket: OpenSSL error: %s", errbuf);
 		}
 		
+#ifdef HAVE_EVP_MD_CTX_FREE
+		EVP_MD_CTX_free(ctx);
+#elif HAVE_EVP_MD_CTX_DESTROY
+        EVP_MD_CTX_destroy(ctx);
+#else
+        EVP_MD_CTX_cleanup(ctx);
+        free(ctx);
+#endif
 		return NULL;
 	}
+
+#ifdef HAVE_EVP_MD_CTX_FREE
+	EVP_MD_CTX_free(ctx);
+#elif HAVE_EVP_MD_CTX_DESTROY
+    EVP_MD_CTX_destroy(ctx);
+#else
+    EVP_MD_CTX_cleanup(ctx);
+    free(ctx);
+#endif
 	
 	/* good signature - parse ticket */
 	if (!parse_ticket(r, tktval_buf, tkt))
@@ -774,6 +828,14 @@ static int check_grace_period(request_rec *r, auth_pubtkt *tkt) {
 	time_t now = time(NULL);
 
 	return ((tkt->grace_period == 0 ) || (now <= tkt->grace_period));
+}
+
+static int check_multifactor(request_rec *r, auth_pubtkt *tkt) {
+    auth_pubtkt_dir_conf *conf = ap_get_module_config(r->per_dir_config, &auth_pubtkt_module);
+    if (conf->require_multifactor == 1) {
+        return (tkt->multifactor == 1);
+    }
+    return 1;
 }
 
 /* Hex conversion, from httpd util.c */
@@ -903,6 +965,8 @@ void dump_config(request_rec *r) {
 		fprintf(stderr,"TKTAuthDebug: %d\n",                conf->debug);
 		fprintf(stderr,"TKTAuthFakeBasicAuth: %d\n", 	    conf->fake_basic_auth);
 		fprintf(stderr,"TKTAuthPassthruBasicAuth: %d\n", 	conf->passthru_basic_auth);
+		fprintf(stderr,"TKTAuthMultifactorURL: %s\n", 	conf->multifactor_url);
+		fprintf(stderr,"TKTAuthRequireMultifactor: %d\n", 	conf->require_multifactor);
 		fflush(stderr);
 	}
 }
@@ -1010,6 +1074,13 @@ static int auth_pubtkt_check(request_rec *r) {
 		return redirect(r, (conf->refresh_url ? conf->refresh_url : conf->login_url));
 	}
 
+        /* Check Mulitfactor - redirect to MultifactorURL if missing */
+        if (!check_multifactor(r, parsed)) {
+		ap_log_rerror(APLOG_MARK, APLOG_INFO, APR_SUCCESS, r,
+			"TKT: multifactor required - redirecting to multifactor URL");
+                return redirect(r, conf->multifactor_url ? conf->multifactor_url : conf->login_url);
+        }
+
 	/* Check tokens - redirect/unauthorised if so */
 	if (!check_tokens(r, parsed))
 		return redirect(r, conf->unauth_url ? conf->unauth_url : conf->login_url);
@@ -1035,7 +1106,7 @@ static int auth_pubtkt_check(request_rec *r) {
 			/* need to decrypt bauth? */
 			bauth = parsed->bauth;
 			if (conf->passthru_basic_key != NULL) {
-				EVP_CIPHER_CTX ctx;
+				EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
 				char *decoded, *decrypted;
 				int len = 0, declen = 0;
 				
@@ -1054,22 +1125,22 @@ static int auth_pubtkt_check(request_rec *r) {
 					/* Decrypt */
 					int tlen;
 					decrypted = (char*)apr_palloc(r->pool, len+1);
-					EVP_CIPHER_CTX_init(&ctx);
-					EVP_DecryptInit(&ctx, EVP_aes_128_cbc(), (unsigned char*)conf->passthru_basic_key, (unsigned char*)decoded);
-					EVP_CIPHER_CTX_set_padding(&ctx, 0);
-					if (EVP_DecryptUpdate(&ctx, (unsigned char*)decrypted, &declen, (unsigned char*)&decoded[PASSTHRU_AUTH_IV_SIZE], len - PASSTHRU_AUTH_IV_SIZE) != 1) {
+					EVP_CIPHER_CTX_init(ctx);
+					EVP_DecryptInit(ctx, EVP_aes_128_cbc(), (unsigned char*)conf->passthru_basic_key, (unsigned char*)decoded);
+					EVP_CIPHER_CTX_set_padding(ctx, 0);
+					if (EVP_DecryptUpdate(ctx, (unsigned char*)decrypted, &declen, (unsigned char*)&decoded[PASSTHRU_AUTH_IV_SIZE], len - PASSTHRU_AUTH_IV_SIZE) != 1) {
 						ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
 							"TKT: passthru decryption failed");
-						EVP_CIPHER_CTX_cleanup(&ctx);
+						EVP_CIPHER_CTX_free(ctx);
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
-					if (EVP_DecryptFinal(&ctx, (unsigned char*)(decrypted + declen), &tlen) != 1) {
+					if (EVP_DecryptFinal(ctx, (unsigned char*)(decrypted + declen), &tlen) != 1) {
 						ap_log_rerror(APLOG_MARK, APLOG_ERR, APR_SUCCESS, r,
 							"TKT: passthru decryption failed");
-						EVP_CIPHER_CTX_cleanup(&ctx);
+						EVP_CIPHER_CTX_free(ctx);
 						return HTTP_INTERNAL_SERVER_ERROR;
 					}
-					EVP_CIPHER_CTX_cleanup(&ctx);
+					EVP_CIPHER_CTX_free(ctx);
 					
 					decrypted[declen] = 0;
 					

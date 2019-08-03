@@ -28,11 +28,12 @@ define("OPENSSL_PATH", "/usr/bin/openssl");
 		udata			user data (optional)
 		bauth			basic auth username:password (for passthru, optional;
 						can optionally use pubtkt_encrypt_bauth() to encrypt it)
+		multifactor             boolean (optional). Notes if multifactor authentication is present
 	
 	Returns:
 		ticket string, or FALSE on failure
 */
-function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata, $bauth = null) {
+function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $validuntil, $graceperiod, $tokens, $udata, $bauth = null, $multifactor = false) {
 	
 	/* format ticket string */
 	$tkt = "uid=$uid;";
@@ -44,7 +45,13 @@ function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $
 	}
 	if (!empty($bauth))
 		$tkt .= "bauth=" . base64_encode($bauth) . ";";
-	$tkt .= "tokens=$tokens;udata=$udata";
+
+        if ($multifactor) {
+                $multifactor_int = 1;
+        } else {
+                $multifactor_int = 0;
+        }
+        $tkt .= "tokens=$tokens;udata=$udata;multifactor=$multifactor_int";
 	
 	if ($privkeytype == "DSA")
 		$algoparam = "-dss1";
@@ -65,7 +72,9 @@ function pubtkt_generate($privkeyfile, $privkeytype, $digest, $uid, $clientip, $
 	fwrite($pipes[0], $tkt);
 	fclose($pipes[0]);
 	
-	$sig = fread($pipes[1], 8192);
+	$sig = '';
+	while (!feof($pipes[1]))
+		$sig .= fread($pipes[1], 8192);
 	fclose($pipes[1]);
 	
 	$res = proc_close($fd);
@@ -257,7 +266,8 @@ function pubtkt_decrypt_bauth($bauth, $key) {
     mcrypt_generic_deinit($td);
     mcrypt_module_close($td);
 
-    list($user, $pass) = explode(':', trim($decrypted));
+    $decrypted = trim($decrypted);
+    $pass = substr($decrypted, strpos($decrypted, ':') + 1);
     return $pass;
 }
 

@@ -14,6 +14,10 @@
 #include <openssl/x509.h>
 #include <openssl/err.h>
 #include <openssl/pem.h>
+#if (OPENSSL_VERSION_NUMBER < 0x10100000L) || defined (LIBRESSL_VERSION_NUMBER)
+#define EVP_MD_CTX_new EVP_MD_CTX_create
+#define EVP_MD_CTX_free EVP_MD_CTX_destroy
+#endif
 
 #include "httpd.h"
 #include "http_config.h"
@@ -48,12 +52,12 @@
 #define REMOTE_USER_TOKENS_ENV "REMOTE_USER_TOKENS"
 #define MIN_AUTH_COOKIE_SIZE 64	/* the Base64-encoded signature alone is >= 64 bytes */
 #define CACHE_SIZE 200			/* number of entries in ticket cache */
-#define MAX_UID_SIZE 64         /* maximum length of uid */
+#define MAX_UID_SIZE 255         /* maximum length of uid */
 #define MAX_TICKET_SIZE 1024	/* maximum length of raw ticket */
 #define PASSTHRU_AUTH_KEY_SIZE 16	/* length of symmetric key for passthru basic auth encryption */
 #define PASSTHRU_AUTH_IV_SIZE 16
 
-#define PUBTKT_AUTH_VERSION "0.10"
+#define PUBTKT_AUTH_VERSION "0.13"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */
@@ -78,6 +82,8 @@ typedef struct  {
 	const EVP_MD		*digest;	/* TKTAuthDigest */
 	const char			*passthru_basic_key;
 	int                 disable_checkip;
+        int                             require_multifactor;
+        char                            *multifactor_url;
 } auth_pubtkt_dir_conf;
 
 /* Ticket structure */
@@ -89,6 +95,7 @@ typedef struct {
 	char			bauth[256];
 	char			tokens[256];
 	char			user_data[256];
+        int                     multifactor;
 } auth_pubtkt;
 
 typedef struct {

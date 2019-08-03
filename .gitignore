@@ -1,0 +1,8 @@
+autom4te.cache
+configure
+Makedefs
+Makefile
+*.in
+*.log
+*.m4
+*.swp
