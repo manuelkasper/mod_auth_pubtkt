@@ -21,8 +21,6 @@ function ldap_auth($user, $password) {
 	ldap_set_option($ldap,LDAP_OPT_PROTOCOL_VERSION,3);
 	ldap_set_option($ldap,LDAP_OPT_REFERRALS,0);
 
-	$success = FALSE;
-
 	// Doing authentication base on the success of the BIND to LDAP.
 	// A vaild, but doesn't feel like the best way
 	if ( $ldap ) {
