@@ -871,12 +871,19 @@ static int redirect(request_rec *r, char *location) {
 	char *query;
 	char *url, *back;
 	const char *hostinfo = 0;
+	const char *scheme = 0;
 	int port;
 	char sep;
 	
 	/* Get the scheme we use (http or https) */
-	const char *scheme = (char*)ap_http_method(r);
-	
+	/* Use X-Forwarded-Proto header for scheme info if available */
+	/* Failing that, use the default scheme */
+	scheme = apr_table_get(r->headers_in, "X-Forwarded-Proto"); 
+
+	if (!scheme){
+		scheme = (char*)ap_http_method(r);
+	}
+
 	/* Use main request args if subrequest */
 	request_rec *r_main = r->main == NULL ? r : r->main;
 	if (r_main->args == NULL) 
