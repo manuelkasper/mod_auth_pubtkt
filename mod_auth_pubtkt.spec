@@ -1,6 +1,6 @@
 Summary: Ticket-based authorization module for the Apache HTTP Server
 Name: mod_auth_pubtkt
-Version: 0.13
+Version: 0.14
 Release: 0
 License: Apache
 Group: Applications/System
@@ -45,6 +45,9 @@ rm -rf %{buildroot}
 %config %{_sysconfdir}/httpd/conf.d/%{conf_file}
 
 %changelog
+* Thu Dec 17 2020 Manuel Kasper <mk@neon1.net> 0.14-0
+- Updated to latest version of mod_auth_pubtkt [0.14]
+
 * Wed Jul 24 2019 Ron <ronald@rmacd.com> 0.13-0
 - Bump version [0.13]
 

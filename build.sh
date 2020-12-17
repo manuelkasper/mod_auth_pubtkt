@@ -4,7 +4,7 @@ set -e
 set +x
 
 MOD=mod_auth_pubtkt
-VERSION=0.13
+VERSION=0.14
 
 # nuke rubbish we don't want
 find . -type f -name Makefile -delete

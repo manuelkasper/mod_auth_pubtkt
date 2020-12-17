@@ -1,3 +1,19 @@
+v0.14 (2020-12-17)
+------------------
+- Respect X-Forwarded-Proto header for method selection
+  (Contributed by Ludek Navratil)
+
+- Build via automake (Contributed by @rmacd)
+
+- Fix OpenSSL compatibility issues (Contributed by @rmacd)
+
+- PHP login: Fix occasional invalid signature (suggested by @michelcve)
+
+- PHP login: Fix bauth when password contains ':' (suggested by @ggramaize)
+
+- Maximum uid length increased to 255 chars (to match Apache spec)
+  (Contributed by @rmacd)
+
 v0.13 (2018-10-15)
 ------------------
 - Add compatibility with OpenSSL 1.1 API (Contributed by Vulpeculus)
