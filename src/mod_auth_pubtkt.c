@@ -1092,6 +1092,7 @@ static int auth_pubtkt_check(request_rec *r) {
 	r->ap_auth_type = MOD_AUTH_PUBTKT_AUTH_TYPE;
 #endif
 	apr_table_set(r->subprocess_env, REMOTE_USER_ENV,        parsed->uid);
+	apr_table_set(r->subprocess_env, REMOTE_USER_PUBTKT_ENV, parsed->uid);
 	apr_table_set(r->subprocess_env, REMOTE_USER_DATA_ENV,   parsed->user_data);
 	apr_table_set(r->subprocess_env, REMOTE_USER_TOKENS_ENV, parsed->tokens);
 
