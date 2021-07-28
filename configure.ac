@@ -7,7 +7,7 @@ AC_CONFIG_AUX_DIR([.])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 AC_CONFIG_SRCDIR([src/ap_compat.h])
-AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_HEADERS([src/config.h])
 
 # Checks for programs.
 AC_PROG_CC
