@@ -872,7 +872,8 @@ static int redirect(request_rec *r, char *location) {
 	char *url, *back;
 	const char *hostinfo = 0;
 	const char *scheme = 0;
-	int port;
+	const char *forwarded_port = 0;
+	int server_port;
 	char sep;
 	
 	/* Get the scheme we use (http or https) */
@@ -902,14 +903,23 @@ static int redirect(request_rec *r, char *location) {
 	/*if (!hostinfo) 	XXX Host header doesn't include port??
 		hostinfo = apr_table_get(r->headers_in, "Host");*/
 	if (!hostinfo) {
-		/* Fallback to using r->hostname and the server port. This usually
-		   works, but behind a reverse proxy the port may well be wrong. 
-		   On the other hand, it's really the proxy's problem, not ours.
-		*/
-		port = ap_get_server_port(r);
-		hostinfo = port == apr_uri_default_port_for_scheme(scheme) ?
-			apr_psprintf(r->pool, "%s", r->hostname) :
-			apr_psprintf(r->pool, "%s:%d", r->hostname, port);
+		server_port = ap_get_server_port(r);
+		forwarded_port = apr_table_get(r->headers_in, "X-Forwarded-Port"); 
+		if (!forwarded_port) {
+			/* Fallback to using r->hostname and the server port. This usually
+			   works, but behind a reverse proxy the port may well be wrong. 
+			   on the other hand, it's really the proxy's problem, not ours.
+			*/
+			hostinfo = server_port == apr_uri_default_port_for_scheme(scheme) ?
+						apr_psprintf(r->pool, "%s", r->hostname) :
+						apr_psprintf(r->pool, "%s:%d", r->hostname, server_port);
+		} else {
+			/* The forwarded port was provided which is the port that the client accessed 
+			   the url at, so it should be correct */
+			hostinfo = atoi(forwarded_port) == apr_uri_default_port_for_scheme(scheme) ?
+						apr_psprintf(r->pool, "%s", r->hostname) :
+						apr_psprintf(r->pool, "%s:%s", r->hostname, forwarded_port);
+		}
 	}
 	back = apr_psprintf(r->pool, "%s://%s%s%s", scheme, hostinfo, r->uri, query);
 	

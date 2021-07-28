@@ -20,6 +20,7 @@
 #endif
 
 #include "httpd.h"
+#include "config.h"
 #include "http_config.h"
 #include "http_log.h"
 #include "http_core.h"
