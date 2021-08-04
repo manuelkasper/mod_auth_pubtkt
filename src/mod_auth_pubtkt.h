@@ -49,6 +49,7 @@
 #define AUTH_COOKIE_NAME "auth_pubtkt"
 #define BACK_ARG_NAME "back"
 #define REMOTE_USER_ENV "REMOTE_USER"
+#define REMOTE_USER_PUBTKT_ENV "REMOTE_USER_PUBTKT"
 #define REMOTE_USER_DATA_ENV "REMOTE_USER_DATA"
 #define REMOTE_USER_TOKENS_ENV "REMOTE_USER_TOKENS"
 #define MIN_AUTH_COOKIE_SIZE 64	/* the Base64-encoded signature alone is >= 64 bytes */
@@ -58,7 +59,7 @@
 #define PASSTHRU_AUTH_KEY_SIZE 16	/* length of symmetric key for passthru basic auth encryption */
 #define PASSTHRU_AUTH_IV_SIZE 16
 
-#define PUBTKT_AUTH_VERSION "0.13"
+#define PUBTKT_AUTH_VERSION "0.13.4-dpd"
 
 /* ----------------------------------------------------------------------- */
 /* Per-directory configuration */
@@ -82,6 +83,7 @@ typedef struct  {
 	EVP_PKEY			*pubkey;	/* public key for signature verification */
 	const EVP_MD		*digest;	/* TKTAuthDigest */
 	const char			*passthru_basic_key;
+	int                 disable_checkip;
         int                             require_multifactor;
         char                            *multifactor_url;
 } auth_pubtkt_dir_conf;

@@ -76,6 +76,7 @@ static void* create_auth_pubtkt_config(apr_pool_t *p, char* path) {
 	conf->pubkey = NULL;
 	conf->digest = NULL;
 	conf->passthru_basic_key = NULL;
+	conf->disable_checkip = 0;
 	conf->require_multifactor = -1;
 	conf->multifactor_url = NULL;
 	return conf;
@@ -106,6 +107,7 @@ static void* merge_auth_pubtkt_config(apr_pool_t *p, void* parent_dirv, void* su
 	conf->pubkey = (subdir->pubkey) ? subdir->pubkey : parent->pubkey;
 	conf->digest = (subdir->digest) ? subdir->digest : parent->digest;
 	conf->passthru_basic_key = (subdir->passthru_basic_key) ? subdir->passthru_basic_key : parent->passthru_basic_key;
+	conf->disable_checkip = (subdir->disable_checkip >= 0) ? subdir->disable_checkip : parent->disable_checkip;
 	conf->require_multifactor = (subdir->require_multifactor >= 0) ? subdir->require_multifactor : parent->require_multifactor;
 	conf->multifactor_url = (subdir->multifactor_url) ? subdir->multifactor_url : parent->multifactor_url;
 	
@@ -352,9 +354,12 @@ static const command_rec auth_pubtkt_cmds[] =
 	AP_INIT_TAKE1("TKTAuthPassthruBasicKey", setup_passthru_basic_key, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, pubkey),
 		OR_ALL, "key to use for decrypting passthru field, must be exactly 16 characters"),
-	AP_INIT_ITERATE("TKTAuthDebug", set_auth_pubtkt_debug, 
+	AP_INIT_ITERATE("TKTAuthDebug", set_auth_pubtkt_debug,
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, debug),
 		OR_AUTHCFG, "debug level (1-3, higher for more debug output)"),
+	AP_INIT_FLAG("TKTAuthDisableCheckIP", ap_set_flag_slot,
+		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, disable_checkip),
+		OR_AUTHCFG, "Disable checking that the remote IP matches the IP in the token."),
 	AP_INIT_FLAG("TKTAuthRequireMultifactor", ap_set_flag_slot, 
 		(void *)APR_OFFSETOF(auth_pubtkt_dir_conf, require_multifactor),
 		OR_AUTHCFG, "whether to require a mulitfactor login flag in the ticket"),
@@ -966,6 +971,7 @@ void dump_config(request_rec *r) {
 		fprintf(stderr,"TKTAuthRefreshURL: %s\n",	        conf->refresh_url);
 		fprintf(stderr,"TKTAuthBadIPURL: %s\n", 	        conf->badip_url);
 		fprintf(stderr,"TKTAuthRequireSSL: %d\n", 	        conf->require_ssl);
+		fprintf(stderr,"TKTAuthDisableCheckIP: %d\n", 	        conf->disable_checkip);
 		if (conf->auth_token->nelts > 0) {
 			char ** auth_token = (char **) conf->auth_token->elts;
 			int i;
@@ -1051,11 +1057,17 @@ static int auth_pubtkt_check(request_rec *r) {
 		char sep = ap_strchr(badip_url, '?') ? '&' : '?';
 		url = apr_psprintf(r->pool, "%s%cip=%s", badip_url, sep, remote_ip);
 
-		ap_log_rerror(APLOG_MARK, APLOG_NOTICE, APR_SUCCESS, r,
-			"TKT: client IP mismatch (ticket: %s, request: %s) - redirecting to badip URL",
-			parsed->clientip, remote_ip);
-
-		return redirect(r, url);
+        if ( conf->disable_checkip )
+        {
+            ap_log_rerror(APLOG_MARK, APLOG_NOTICE, APR_SUCCESS, r,
+                "TKT: client IP mismatch (ticket: %s, request: %s), however, TKTAuthDisableCheckIP is set, ignoring.",
+                parsed->clientip, remote_ip);
+        } else {
+            ap_log_rerror(APLOG_MARK, APLOG_NOTICE, APR_SUCCESS, r,
+                "TKT: client IP mismatch (ticket: %s, request: %s) - redirecting to badip URL",
+                parsed->clientip, remote_ip);
+            return redirect(r, url);
+	    }
 	}
 
 	/* Valid ticket, check timeout - redirect/timed-out if so */
@@ -1097,6 +1109,7 @@ static int auth_pubtkt_check(request_rec *r) {
 	r->ap_auth_type = MOD_AUTH_PUBTKT_AUTH_TYPE;
 #endif
 	apr_table_set(r->subprocess_env, REMOTE_USER_ENV,        parsed->uid);
+	apr_table_set(r->subprocess_env, REMOTE_USER_PUBTKT_ENV, parsed->uid);
 	apr_table_set(r->subprocess_env, REMOTE_USER_DATA_ENV,   parsed->user_data);
 	apr_table_set(r->subprocess_env, REMOTE_USER_TOKENS_ENV, parsed->tokens);
 
