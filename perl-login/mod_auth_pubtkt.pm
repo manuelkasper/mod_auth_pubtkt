@@ -33,6 +33,7 @@ our $VERSION = '0.1';
     		graceperiod=> 3600,   # grace period of an hour
     		tokens     => undef,  # comma separated string of tokens.
     		userdata   => undef   # any application specific data to pass.
+                multifactor=> 1       # Authorized with multifactor
                  );
 
     ## $ticket string will look something like: 
@@ -146,6 +147,10 @@ sub pubtkt_generate
 	croak "Invalid \"client_ip\" value ($client_ip), expecting a valid IP address."
 		unless $client_ip eq "" || $client_ip =~ /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 
+	my $multifactor = $args{multifactor} || 0;
+	croak "Invalid \"multifactor\" value ($grace_period), expecting 0 or 1."
+		unless $multifactor eq "0" || $multifactor eq "1";
+
 	my $tokens = $args{tokens} || "";
 	my $user_data = $args{userdata} || "";
 
@@ -154,6 +159,7 @@ sub pubtkt_generate
 	$tkt .= "cip=$client_ip;" if $client_ip;
 	$tkt .= "validuntil=$valid_until;";
 	$tkt .= "graceperiod=" . ($valid_until - $grace_period) . ";" if $grace_period;
+        $tkt .= "multifactor=1;" if $multifactor;
 	$tkt .= "tokens=$tokens;";
 	$tkt .= "udata=$user_data";
 
